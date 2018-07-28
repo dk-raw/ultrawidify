@@ -8,6 +8,8 @@ class CommsClient {
       this.port = browser.runtime.connect({name: name});
     } else if (BrowserDetect.chrome) {
       this.port = chrome.runtime.connect({name: name});
+    } else if (BrowserDetect.edge) {
+      this.port = browser.runtime.connect({name: name});
     }
 
     var ths = this;
@@ -66,8 +68,14 @@ class CommsClient {
       while(true){
         await t.sleep(100);
         if(this.hasSettings){
+          if(Debug.debug) {
+            console.log("[Comms::waitForSettings] settings loaded:", this.hasSettings, ExtensionConf);
+          }
           resolve();
           break;
+        }
+        if(Debug.debug) {
+          console.log("[Comms::waitForSettings] settings still not loaded.");
         }
       }
     });
@@ -144,9 +152,12 @@ class CommsServer {
     if (BrowserDetect.firefox) {
       browser.runtime.onConnect.addListener(p => ths.onConnect(p));
       browser.runtime.onMessage.addListener(m => ths.processReceivedMessage_nonpersistent_ff(m));
-    } else {
+    } else if (BrowserDetect.chrome) {
       chrome.runtime.onConnect.addListener(p => ths.onConnect(p));
       chrome.runtime.onMessage.addListener((msg, sender, callback) => ths.processReceivedMessage_nonpersistent_chrome(m, sender, callback));
+    } else if (BrowserDetect.edge) {
+      browser.runtime.onConnect.addListener(p => ths.onConnect(p));
+      browser.runtime.onMessage.addListener((msg, sender, callback) => ths.processReceivedMessage_nonpersistent_chrome(m, sender, callback));
     }
   }
 
@@ -165,9 +176,15 @@ class CommsServer {
   async _getActiveTab() {
     if (BrowserDetect.firefox) {
       return await browser.tabs.query({currentWindow: true, active: true});
-    } else {
+    } else if (BrowserDetect.chrome) {
       return await new Promise( (resolve, reject) => {
         chrome.tabs.query({currentWindow: true, active: true}, function (res) {
+          resolve(res);
+        });
+      });
+    } else if (BrowserDetect.edge) {
+      return await new Promise( (resolve, reject) => {
+        browser.tabs.query({currentWindow: true, active: true}, function (res) {
           resolve(res);
         });
       });
@@ -225,6 +242,7 @@ class CommsServer {
     }
 
     if (message.cmd === 'get-config') {
+      console.log("GOTTEN CONFIG")
       port.postMessage({cmd: "set-config", conf: ExtensionConf, site: this.server.currentSite})
     } else if (message.cmd === 'set-stretch') {
       this.sendToActive(message);

@@ -1,8 +1,8 @@
-var _bd_usebrowser = "firefox";
-
 var _bd_isFirefox = false;
 var _bd_isChrome = false;
-var _bd_isEdge = false;    // we'll see if FF 
+var _bd_isEdge = true;    // we'll see if FF or Chrome
+var _bd_usebrowser = "edge";
+
 
 try{
   // todo: find something that works in firefox but not in edge (or vice-versa)  

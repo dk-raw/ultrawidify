@@ -5,7 +5,7 @@ if(Debug.debug)
   console.log("Loading: Settings.js");
 
 var _se_init = async function(isSlave){
-  
+  try {
   if(Debug.debug)
     console.log("[Settings::_se_init()] -------- starting init! ---------");
   
@@ -57,7 +57,9 @@ var _se_init = async function(isSlave){
   
   if(Debug.debug)
     console.log("[Settings::_se_init] settings have been loaded/reloaded. Current state: ", ExtensionConf);
-  
+} catch (e){
+  console.log("fucky wucky", e)
+}
 }
 
 var _se_patchUserSettings = function(saved, extDefaults){

@@ -241,11 +241,14 @@ function openMenu(menu){
   }
   
   for(var m in Menu){
-    Menu[m].classList.add("hidden");
+    if(Menu[m]) {
+      Menu[m].classList.add("hidden");
+    }
   }
   for(var m in MenuTab){
-    if(MenuTab[m])
+    if(MenuTab[m]){
       MenuTab[m].classList.remove("selected");
+    }
   }
   
   if(menu == "arSettings" || menu == "cssHacks" ){

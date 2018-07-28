@@ -5,7 +5,7 @@ var _sm_setopt = function(item){
   return browser.storage.local.set(item);
 }
 var _sm_getopt = function(prop, callback){
-  if(BrowserDetect.usebrowser == "chrome")
+  if(usebrowser == "chrome")
     return browser.storage.local.get(prop, callback);
   else
     return browser.storage.local.get(prop).then(callback);
@@ -13,29 +13,35 @@ var _sm_getopt = function(prop, callback){
 
 var _sm_chrome_getopt_wrapper = async function(prop){
   return new Promise(function (resolve, reject){
+    chrome.storage.local.get(prop, function(response){
+      resolve(response);
+    });
+  });
+}
+
+var _sm_edge_getopt_wrapper = async function(prop){
+  return new Promise(function (resolve, reject){
     browser.storage.local.get(prop, function(response){
       resolve(response);
     });
   });
 }
 
-
 var _sm_getopt_async = async function(prop){
   if(Debug.debug && Debug.debugStorage)
     console.log("[StorageManager::_sm_getopt_async] requesting prop",prop,"from localStorage.");
  
-  if(BrowserDetect.usebrowser == "chrome"){
+  if (BrowserDetect.firefox) {
+    var ret = await browser.storage.local.get(prop);
+    return ret;
+  } else if (BrowserDetect.chrome) {
     var ret = await _sm_chrome_getopt_wrapper(prop);
     return ret;
-  }
-  else{
-    var ret = await browser.storage.local.get(prop);
-    
-    if(Debug.debug && Debug.debugStorage)
-      console.log("[StorageManager::_sm_getopt_async] got prop", prop, "; value: ", ret);
-    
+  } else if (BrowserDetect.edge) {
+    var ret = await _sm_edge_getopt_wrapper(prop);
     return ret;
-  }
+  } 
+  return null;
 }
 
 var _sm_delopt = function(item){
