@@ -5,7 +5,8 @@ var _bd_usebrowser = "edge";
 
 
 try{
-  // todo: find something that works in firefox but not in edge (or vice-versa)  
+  // todo: find something that works in firefox but not in edge (or vice-versa)
+  // note that this function returns a promise! and is broken for some reason
   var browserinfo = browser.runtime.getBrowserInfo();
 
   // we don't need to actually check because only firefox supports that. 

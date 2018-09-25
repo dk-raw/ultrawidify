@@ -15,15 +15,17 @@ class UWServer {
   }
 
   async setup() {
-    await Settings.init();
+    this.settings = new Settings();
+
+    await this.settings.init();
     this.comms = new CommsServer(this);
 
 
     var ths = this;
     if(BrowserDetect.firefox) {
-      browser.tabs.onActivated.addListener((m) => ths.onTabSwitched(m));  
+      browser.tabs.onActivated.addListener(function(m) {ths.onTabSwitched(m)});  
     } else if (BrowserDetect.chrome) {
-      chrome.tabs.onActivated.addListener((m) => ths.onTabSwitched(m));
+      chrome.tabs.onActivated.addListener(function(m) {ths.onTabSwitched(m)});
     } else if (BrowserDetect.edge) {
       browser.tabs.onActivated.addListener((m) => ths.onTabSwitched(m));  
     }
@@ -59,7 +61,7 @@ class UWServer {
       console.log("[uw-bg::onTabSwitched] TAB CHANGED, GETTING INFO FROM MAIN TAB");
 
     try {
-    var tabId = activeInfo.tabId;   // just for readability
+      var tabId = activeInfo.tabId;   // just for readability
 
     var tab;
     if (BrowserDetect.firefox) {
@@ -70,7 +72,7 @@ class UWServer {
       var tab = await this._promisifyTabsGet(browser, tabId);
     }
 
-    this.currentSite = this.extractHostname(tab.url);
+      this.currentSite = this.extractHostname(tab.url);
     } catch(e) {
       console.log(e);
     }

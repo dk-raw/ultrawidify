@@ -4,15 +4,17 @@ if(Debug.debug)
 class Keybinds {
   constructor(pageInfo){
     this.pageInfo = pageInfo;
+    this.settings = pageInfo.settings;
     this.inputs = ['input','select','button','textarea'];
   }
 
   setup(){
     var ths = this;
     document.addEventListener('keydown',  (event) => ths.handleKeypress(event) );
+    document.addEventListener('keyup', (event) => ths.handleKeypress(event,true) );
   }
 
-  handleKeypress(event) {          // Tukaj ugotovimo, katero tipko smo pritisnili
+  handleKeypress(event, isKeyUp) {          // Tukaj ugotovimo, katero tipko smo pritisnili
   
     if(Debug.debug  && Debug.keyboard ){
       console.log("%c[Keybinds::_kbd_process] we pressed a key: ", "color: #ff0", event.key , " | keydown: ", event.keydown, "event:", event);
@@ -36,7 +38,7 @@ class Keybinds {
     
     // building modifiers list:
     var modlist = "";
-    for(var mod of ExtensionConf.keyboard.modKeys){
+    for(var mod of this.settings.active.keyboard.modKeys){
       if(event[mod])
         modlist += (mod + "_")
     }
@@ -52,22 +54,31 @@ class Keybinds {
       console.log("[Keybinds::_kbd_process] our full keypress is this", keypress );
     
     
-    if(ExtensionConf.keyboard.shortcuts[keypress]){
-      var conf = ExtensionConf.keyboard.shortcuts[keypress];
+    if(this.settings.active.keyboard.shortcuts[keypress]){
+      var conf = this.settings.active.keyboard.shortcuts[keypress];
+
+      if (isKeyUp) {
+        if (conf.keyup) {
+          conf = conf.keyup;
+        } else {
+          return;
+        }
+      }
       
-      if(Debug.debug && Debug.keyboard)
-        console.log("[Keybinds::_kbd_process] there's an action associated with this keypress. conf:", conf);
-      
-      if(conf.action === "crop"){
+      if(Debug.debug && Debug.keyboard) {
+        console.log("[Keybinds::_kbd_process] there's an action associated with this keypress. conf:", conf, "conf.arg:", conf.arg);
+      }
+
+      if (conf.action === "crop"){
         this.pageInfo.stopArDetection();
         this.pageInfo.setAr(conf.arg);
-      }
-      if(conf.action === "zoom"){
+      } else if (conf.action === "zoom"){
         this.pageInfo.stopArDetection();
         this.pageInfo.zoomStep(conf.arg);
-      }
-      if(conf.action === "auto-ar"){
+      } else if (conf.action === "auto-ar"){
         this.pageInfo.startArDetection();
+      } else if (conf.action === "pan") {
+        this.pageInfo.setPanMode(conf.arg);
       }
     }
   }

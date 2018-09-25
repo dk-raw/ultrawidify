@@ -31,7 +31,7 @@ var ExtensionConf = {
     vSamples: 360,
     // samplingInterval: 10,     // we sample at columns at (width/this) * [ 1 .. this - 1] 
     blackLevel_default: 10,   // everything darker than 10/255 across all RGB components is considered black by
-                              // default. GlobalVars.blackLevel can decrease if we detect darker black.
+                              // default. blackLevel can decrease if we detect darker black.
     blackbarTreshold: 16,     // if pixel is darker than blackLevel + blackbarTreshold, we count it as black
                               // on 0-255. Needs to be fairly high (8 might not cut it) due to compression
                               // artifacts in the video itself
@@ -96,8 +96,17 @@ var ExtensionConf = {
   arChange: {
     samenessTreshold: 0.025,  // if aspect ratios are within 2.5% within each other, don't resize
   },
+  zoom: {
+    minLogZoom: -1,
+    maxLogZoom: 3,
+    announceDebounce: 200     // we wait this long before announcing new zoom
+  },
   miscFullscreenSettings: {
-    videoFloat: "center"
+    videoFloat: "center",
+    mousePan: {
+      enabled: false
+    },
+    defaultAr: "original",
   },
   stretch: {
     initialMode: 0,                     // 0 - no stretch, 1 - basic, 2 - hybrid, 3 - conditional
@@ -163,6 +172,26 @@ var ExtensionConf = {
       "u": {
         action: "zoom",
         arg: -0.1
+      },
+      "p": {
+        action: "pan",
+        arg: 'toggle'   // possible: 'enable', 'disable', 'toggle'
+      },
+      "shiftKey_shift": {
+        action: "pan",
+        arg: 'toggle',
+        keyup: {        
+          action: 'pan',
+          arg: 'toggle'
+        }
+      },
+      "shift": {
+        action: "",
+        arg: "",
+        keyup: {
+          action: 'pan',
+          arg: 'toggle',
+        }
       }
       //#endregion
     },
@@ -178,6 +207,15 @@ var ExtensionConf = {
   //    status: <option>              // should extension work on this site?
   //    arStatus: <option>            // should we do autodetection on this site?
   //    statusEmbedded: <option>      // reserved for future... maybe
+  //    
+  //    defaultAar?: <ratio>          // automatically apply this aspect ratio on this side. Use extension defaults if undefined.
+  //    stretch? <stretch mode>       // automatically stretch video on this site in this manner
+  //    videoAlignment? <left|center|right>
+  //
+  //    type: <official|community|user>  // 'official' — blessed by Tam. 
+  //                                     // 'community' — blessed by reddit.
+  //                                     // 'user' — user-defined (not here)
+  //    override: <true|false>           // override user settings for this site on update
   // } 
   //  
   // Veljavne vrednosti za možnosti 
@@ -194,13 +232,15 @@ var ExtensionConf = {
       status: "enabled",                // should extension work on this site?
       arStatus: "default",              // should we enable autodetection
       statusEmbedded: "enabled",        // should extension work for this site when embedded on other sites?
-      override: false                   // ignore value localStorage in favour of this
+      override: false,                  // ignore value localStorage in favour of this
+      type: 'official'                  // is officially supported? (Alternatives are 'community' and 'user-defined')
     },
     "www.netflix.com" : {
       status: "enabled",
       arStatus: BrowserDetect.firefox ? "default" : "disabled",
       statusEmbedded: "enabled",
-      override: false
+      override: false,
+      type: 'official'
     },
   }
 }

@@ -13,53 +13,64 @@ if(Debug.debug){
 }
 
 
-var pageInfo;
-var comms;
-
-async function init(){
-  if(Debug.debug)
-    console.log("[uw::main] loading configuration ...");
-
-  comms = new CommsClient('content-client-port');
-
-  // Edge be like: iterating nodes from document.getElementsByTagName()? We don't do that here.
-  if(BrowserDetect.edge) {
-    HTMLCollection.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
+class UW {
+  constructor(){
+    this.pageInfo = undefined;
+    this.comms = undefined;
+    this.settings = undefined;
+    this.keybinds = undefined;
   }
 
-
-  // load settings
-  var settingsLoaded = await comms.requestSettings();
-  if(!settingsLoaded){
-    if(Debug.debug) {
-      console.log("[uw::main] failed to get settings (settingsLoaded=",settingsLoaded,") Waiting for settings the old fashioned way");
+  async init(){
+    if (Debug.debug) {
+      console.log("[uw::main] loading configuration ...");
     }
-    comms.requestSettings_fallback();
-    await comms.waitForSettings();
-    if(Debug.debug){
-      console.log("[uw::main] settings loaded.");
-    }
-  }
-
-  if(Debug.debug)
-    console.log("[uw::main] configuration should be loaded now");
-
   
-  // če smo razširitev onemogočili v nastavitvah, ne naredimo ničesar
-  // If extension is soft-disabled, don't do shit
-  if(! canStartExtension()){
-    if(Debug.debug) {
-      console.log("[uw::init] EXTENSION DISABLED, THEREFORE WONT BE STARTED")
+    // init() is re-run any time settings change
+    if (this.pageInfo) {
+      if(Debug.debug){
+        console.log("[uw::init] Destroying existing pageInfo", this.pageInfo);
+      }
+      this.pageInfo.destroy();
     }
-    return;
-  }
-
-  pageInfo = new PageInfo();
-  comms.setPageInfo(pageInfo);
-
-  if(Debug.debug){
-    console.log("[uw.js::setup] pageInfo initialized. Here's the object:", pageInfo);
+    if (this.comms) {
+      this.comms.destroy();
+    }
+  
+    if (!this.settings) {
+      var ths = this;
+      this.settings = new Settings(undefined, () => ths.init());
+      await this.settings.init();
+    }
+  
+    this.comms = new CommsClient('content-client-port', this.settings);
+  
+    // če smo razširitev onemogočili v nastavitvah, ne naredimo ničesar
+    // If extension is soft-disabled, don't do shit
+    if(! this.settings.canStartExtension()){
+      if(Debug.debug) {
+        console.log("[uw::init] EXTENSION DISABLED, THEREFORE WONT BE STARTED")
+      }
+      return;
+    }
+  
+    try {
+      this.pageInfo = new PageInfo(this.comms, this.settings);
+      if(Debug.debug){
+        console.log("[uw.js::setup] pageInfo initialized. Here's the object:", this.pageInfo);
+      }
+      this.comms.setPageInfo(this.pageInfo);
+  
+      this.keybinds = new Keybinds(this.pageInfo);
+      this.keybinds.setup();
+      
+    } catch (e) {
+      console.log("[uw::init] FAILED TO START EXTENSION. Error:", e);
+    }
+  
+    
   }
 }
 
-init();
+var uw = new UW();
+uw.init();

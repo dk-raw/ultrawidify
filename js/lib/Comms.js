@@ -3,40 +3,69 @@ if(Debug.debug){
 }
 
 class CommsClient {
-  constructor(name) {
+  constructor(name, settings) {
     if (BrowserDetect.firefox) {
       this.port = browser.runtime.connect({name: name});
     } else if (BrowserDetect.chrome) {
       this.port = chrome.runtime.connect({name: name});
     } else if (BrowserDetect.edge) {
-      this.port = browser.runtime.connect({name: name});
+      this.port = browser.runtime.connect({name: name})
     }
 
     var ths = this;
-    this.port.onMessage.addListener(m => ths.processReceivedMessage(m));
-    this.hasSettings = false;
+    this._listener = m => ths.processReceivedMessage(m);
+    this.port.onMessage.addListener(this._listener);
+
+    this.settings = settings;
+    this.pageInfo = undefined;
+    this.commsId = (Math.random() * 20).toFixed(0);
   }
   
+  destroy() {
+    this.pageInfo = null;
+    this.settings = null;
+    this.port.onMessage.removeListener(this._listener);
+  }
+
   setPageInfo(pageInfo){
+
     this.pageInfo = pageInfo;
+
+    if(Debug.debug) {
+      console.log(`[CommsClient::setPageInfo] <${this.commsId}>`, "SETTING PAGEINFO —", this.pageInfo, this)
+    }
+
+    var ths = this;
+    this._listener = m => ths.processReceivedMessage(m);
+    this.port.onMessage.removeListener(this._listener);
+    this.port.onMessage.addListener(this._listener);
+    
   }
 
   processReceivedMessage(message){
     if(Debug.debug && Debug.comms){
-      console.log("[CommsClient.js::processMessage] Received message from background script!", message);
+      console.log(`[CommsClient.js::processMessage] <${this.commsId}> Received message from background script!`, message);
+    }
+
+    if (!this.pageInfo || !this.settings.active) {
+      if(Debug.debug && Debug.comms){
+        console.log(`[CommsClient.js::processMessage] <${this.commsId}> this.pageInfo (or settings) not defined. Extension is probably disabled for this site.\npageInfo:`, this.pageInfo,
+                    "\nsettings.active:", this.settings.active,
+                    "\nnobj:", this
+        );
+      }
+      return;
+    }
+
+    if (message.cmd === 'get-current-zoom') {
+      this.pageInfo.requestCurrentZoom();
     }
 
     if (message.cmd === "set-ar") {
       this.pageInfo.setAr(message.ratio);
-    } else if (message.cmd === 'set-video-float') {
-      ExtensionConf.miscFullscreenSettings.videoFloat = message.newFloat;
+    } else if (message.cmd === 'set-alignment') {
+      this.pageInfo.setVideoFloat(message.mode);
       this.pageInfo.restoreAr();
-    } else if (message.cmd === "has-videos") {
-      
-    } else if (message.cmd === "set-config") {
-      this.hasSettings = true;
-      ExtensionConf = message.conf;
-      // this.pageInfo.reset();
     } else if (message.cmd === "set-stretch") {
       this.pageInfo.setStretchMode(StretchMode[message.mode]);
     } else if (message.cmd === "autoar-start") {
@@ -51,34 +80,9 @@ class CommsClient {
     } else if (message.cmd === "resume-processing") {
       // todo: autoArStatus
       this.pageInfo.resumeProcessing(message.autoArStatus);
-    } else if (message.cmd === "reload-settings") {
-      ExtensionConf = message.newConf;
-      this.pageInfo.reset();
-      if(ExtensionConf.arDetect.mode === "disabled") {
-        this.pageInfo.stopArDetection();
-      } else {
-        this.pageInfo.startArDetection();
-      }
+    } else if (message.cmd === 'set-zoom') {
+      this.pageInfo.setZoom(message.zoom, true);
     }
-  }
-
-  async waitForSettings(){
-    var t = this;
-    return new Promise( async (resolve, reject) => {
-      while(true){
-        await t.sleep(100);
-        if(this.hasSettings){
-          if(Debug.debug) {
-            console.log("[Comms::waitForSettings] settings loaded:", this.hasSettings, ExtensionConf);
-          }
-          resolve();
-          break;
-        }
-        if(Debug.debug) {
-          console.log("[Comms::waitForSettings] settings still not loaded.");
-        }
-      }
-    });
   }
 
   async sleep(n){
@@ -124,16 +128,16 @@ class CommsClient {
       return Promise.resolve(false);
     }
 
-    ExtensionConf = JSON.parse(response.extensionConf);
+    this.settings.active = JSON.parse(response.extensionConf);
     return Promise.resolve(true);
-  }
-
-  async requestSettings_fallback(){
-    this.port.postMessage({cmd: "get-config"});
   }
 
   registerVideo(){
     this.port.postMessage({cmd: "has-video"});
+  }
+
+  announceZoom(scale){
+    this.port.postMessage({cmd: "announce-zoom", zoom: scale});
   }
 
   unregisterVideo(){
@@ -144,6 +148,7 @@ class CommsClient {
 class CommsServer {
   constructor(server) {
     this.server = server;
+    this.settings = server.settings;
     this.ports = [];
 
     var ths = this;
@@ -161,8 +166,24 @@ class CommsServer {
     }
   }
 
-  async getCurrentTabUrl() {
+  async getCurrentTabHostname() {
+    const activeTab = await this._getActiveTab();
 
+    const url = activeTab[0].url;
+
+    var hostname;
+
+    if (url.indexOf("://") > -1) {    //find & remove protocol (http, ftp, etc.) and get hostname
+      hostname = url.split('/')[2];
+    }
+    else {
+      hostname = url.split('/')[0];
+    }
+    
+    hostname = hostname.split(':')[0];   //find & remove port number
+    hostname = hostname.split('?')[0];   //find & remove "?"
+
+    return hostname;
   }
 
   sendToAll(message){
@@ -178,7 +199,7 @@ class CommsServer {
       return await browser.tabs.query({currentWindow: true, active: true});
     } else if (BrowserDetect.chrome) {
       return await new Promise( (resolve, reject) => {
-        chrome.tabs.query({currentWindow: true, active: true}, function (res) {
+        chrome.tabs.query({lastFocusedWindow: true, active: true}, function (res) {
           resolve(res);
         });
       });
@@ -236,95 +257,52 @@ class CommsServer {
     });
   }
 
-  processReceivedMessage(message, port){
+  async processReceivedMessage(message, port){
     if (Debug.debug && Debug.comms) {
-      console.log("[CommsServer.js::processMessage] Received message from background script!", message, "port", port);
+      console.log("[CommsServer.js::processMessage] Received message from background script!", message, "port", port, "\nsettings and server:", this.settings,this.server);
+    }
+
+    if (message.cmd === 'announce-zoom') {
+      // forward off to the popup, no use for this here
+      try {
+        this.popupPort.postMessage({cmd: 'set-current-zoom', zoom: message.zoom});
+      } catch (e) {
+        // can't forward stuff to popup if it isn't open
+      }
+    } else if (message.cmd === 'get-current-zoom') {
+      this.sendToActive(message);
+    }
+
+    if (message.cmd === 'get-current-site') {
+      port.postMessage({cmd: 'set-current-site', site: await this.getCurrentTabHostname()});
     }
 
     if (message.cmd === 'get-config') {
-      console.log("GOTTEN CONFIG")
-      port.postMessage({cmd: "set-config", conf: ExtensionConf, site: this.server.currentSite})
+      if(Debug.debug) {
+        console.log("CommsServer: received get-config. Active settings?", this.settings.active, "\n(settings:", this.settings, ")")
+      }
+      port.postMessage({cmd: "set-config", conf: this.settings.active, site: this.server.currentSite})
     } else if (message.cmd === 'set-stretch') {
       this.sendToActive(message);
-    } else if (message.cmd === 'set-stretch-default') {
-      ExtensionConf.stretch.initialMode = message.mode;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
     } else if (message.cmd === 'set-ar') {
       this.sendToActive(message);
     } else if (message.cmd === 'set-custom-ar') {
-      ExtensionConf.keyboard.shortcuts.q.arg = message.ratio;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
-    } else if (message.cmd === 'set-video-float') {
+      this.settings.active.keyboard.shortcuts.q.arg = message.ratio;
+      this.settings.save();
+    } else if (message.cmd === 'set-alignment') {
       this.sendToActive(message);
-      ExtensionConf.miscFullscreenSettings.videoFloat = message.newFloat;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
-
     } else if (message.cmd === 'autoar-start') {
       this.sendToActive(message);
-    } else if (message.cmd === "autoar-enable") {   // LEGACY - can be removed prolly?
-      ExtensionConf.arDetect.mode = "blacklist";
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
-    } else if (message.cmd === "autoar-disable") {  // LEGACY - can be removed prolly?
-      ExtensionConf.arDetect.mode = "disabled";
+    } else if (message.cmd === "autoar-disable") {  // LEGACY - can be removed prolly
+      this.settings.active.arDetect.mode = "disabled";
       if(message.reason){
-        ExtensionConf.arDetect.disabledReason = message.reason;
+        this.settings.active.arDetect.disabledReason = message.reason;
       } else {
-        ExtensionConf.arDetect.disabledReason = 'User disabled';
+        this.settings.active.arDetect.disabledReason = 'User disabled';
       }
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
-    } else if (message.cmd === "autoar-set-interval") {
-      if(Debug.debug)
-        console.log("[uw-bg] trying to set new interval for autoAr. New interval is",message.timeout,"ms");
-
-      // set fairly liberal limit
-      var timeout = message.timeout < 4 ? 4 : message.timeout;
-      ExtensionConf.arDetect.timer_playing = timeout;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
-    } else if (message.cmd === "set-autoar-defaults") {
-      ExtensionConf.arDetect.mode = message.mode;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: "reload-settings", sender: "uwbg"})
-    } else if (message.cmd === "set-autoar-for-site") {
-      if (ExtensionConf.sites[this.server.currentSite]) {
-        ExtensionConf.sites[this.server.currentSite].arStatus = message.mode;
-        Settings.save(ExtensionConf);
-      } else {
-        ExtensionConf.sites[this.server.currentSite] = {
-          status: "default",
-          arStatus: message.mode,
-          statusEmbedded: "default"
-        };
-        Settings.save(ExtensionConf);
-      }
-      this.sendToAll({cmd: "reload-settings", sender: "uwbg"});
-    } else if (message.cmd === "set-extension-defaults") {
-      ExtensionConf.extensionMode = message.mode;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: "reload-settings", sender: "uwbg"})
-    } else if (message.cmd === "set-extension-for-site") {
-      if (ExtensionConf.sites[this.server.currentSite]) {
-        ExtensionConf.sites[this.server.currentSite].status = message.mode;
-        Settings.save(ExtensionConf);
-      } else {
-        ExtensionConf.sites[this.server.currentSite] = {
-          status: message.mode,
-          arStatus: "default",
-          statusEmbedded: message.mode
-        };
-        Settings.save(ExtensionConf);        
-        console.log("SAVING PER-SITE OPTIONS,", this.server.currentSite, ExtensionConf.sites[this.server.currentSite])
-      }
-      this.sendToAll({cmd: "reload-settings", sender: "uwbg"});
-    }
-
-    if (message.cmd.startsWith('set-')) {
-      port.postMessage({cmd: "set-config", conf: ExtensionConf, site: this.server.currentSite});
+      this.settings.save();
+    } else if (message.cmd === 'set-zoom') {
+      this.sendToActive(message);
     }
   }
 
@@ -334,29 +312,29 @@ class CommsServer {
     }
 
     if (message.cmd === 'get-config') {
-      var ret = {extensionConf: JSON.stringify(ExtensionConf)};
+      var ret = {extensionConf: JSON.stringify(this.settings.active)};
       if (Debug.debug && Debug.comms) {
         console.log("%c[CommsServer.js::processMessage_nonpersistent_ff] Returning this:", "background-color: #11D; color: #aad", ret);
       }
       Promise.resolve(ret);
     } else if (message.cmd === "autoar-enable") {
-      ExtensionConf.arDetect.mode = "blacklist";
-      Settings.save(ExtensionConf);
+      this.settings.active.arDetect.mode = "blacklist";
+      this.settings.save();
       this.sendToAll({cmd: "reload-settings", sender: "uwbg"})
       if(Debug.debug){
-        console.log("[uw-bg] autoar set to enabled (blacklist). evidenz:", ExtensionConf);
+        console.log("[uw-bg] autoar set to enabled (blacklist). evidenz:", this.settings.active);
       }
     } else if (message.cmd === "autoar-disable") {
-      ExtensionConf.arDetect.mode = "disabled";
+      this.settings.active.arDetect.mode = "disabled";
       if(message.reason){
-        ExtensionConf.arDetect.disabledReason = message.reason;
+        this.settings.active.arDetect.disabledReason = message.reason;
       } else {
-        ExtensionConf.arDetect.disabledReason = 'User disabled';
+        this.settings.active.arDetect.disabledReason = 'User disabled';
       }
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
+      this.settings.save();
+      this.sendToAll({cmd: 'reload-settings', newConf: this.settings.active});
       if(Debug.debug){
-        console.log("[uw-bg] autoar set to disabled. evidenz:", ExtensionConf);
+        console.log("[uw-bg] autoar set to disabled. evidenz:", this.settings.active);
       }
     } else if (message.cmd === "autoar-set-interval") {
       if(Debug.debug)
@@ -364,9 +342,9 @@ class CommsServer {
 
       // set fairly liberal limit
       var timeout = message.timeout < 4 ? 4 : message.timeout;
-      ExtensionConf.arDetect.timer_playing = timeout;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
+      this.settings.active.arDetect.timer_playing = timeout;
+      this.settings.save();
+      this.sendToAll({cmd: 'reload-settings', newConf: this.settings.active});
     }
   }
 
@@ -376,26 +354,26 @@ class CommsServer {
     }
 
     if(message.cmd === 'get-config') {
-      sendResponse({extensionConf: JSON.stringify(ExtensionConf), site: getCurrentTabUrl()});
+      sendResponse({extensionConf: JSON.stringify(this.settings.active), site: this.getCurrentTabHostname()});
       // return true;
     } else if (message.cmd === "autoar-enable") {
-      ExtensionConf.arDetect.mode = "blacklist";
-      Settings.save(ExtensionConf);
+      this.settings.active.arDetect.mode = "blacklist";
+      this.settings.save();
       this.sendToAll({cmd: "reload-settings", sender: "uwbg"})
       if(Debug.debug){
-        console.log("[uw-bg] autoar set to enabled (blacklist). evidenz:", ExtensionConf);
+        console.log("[uw-bg] autoar set to enabled (blacklist). evidenz:", this.settings.active);
       }
     } else if (message.cmd === "autoar-disable") {
-      ExtensionConf.arDetect.mode = "disabled";
+      this.settings.active.arDetect.mode = "disabled";
       if(message.reason){
-        ExtensionConf.arDetect.disabledReason = message.reason;
+        this.settings.active.arDetect.disabledReason = message.reason;
       } else {
-        ExtensionConf.arDetect.disabledReason = 'User disabled';
+        this.settings.active.arDetect.disabledReason = 'User disabled';
       }
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
+      this.settings.save();
+      this.sendToAll({cmd: 'reload-settings', newConf: this.settings.active});
       if(Debug.debug){
-        console.log("[uw-bg] autoar set to disabled. evidenz:", ExtensionConf);
+        console.log("[uw-bg] autoar set to disabled. evidenz:", this.settings.active);
       }
     } else if (message.cmd === "autoar-set-interval") {
       if(Debug.debug)
@@ -403,9 +381,9 @@ class CommsServer {
 
       // set fairly liberal limit
       var timeout = message.timeout < 4 ? 4 : message.timeout;
-      ExtensionConf.arDetect.timer_playing = timeout;
-      Settings.save(ExtensionConf);
-      this.sendToAll({cmd: 'reload-settings', newConf: ExtensionConf});
+      this.settings.active.arDetect.timer_playing = timeout;
+      this.settings.save();
+      this.sendToAll({cmd: 'reload-settings', newConf: this.settings.active});
     }
   }
 }
