@@ -62,9 +62,6 @@ class PageInfo {
     var videoExists = false;    
     var video, v;
 
-    console.log(vids, "<vids be this-------------------------")
-
-
     for (video of vids) {
       // če najdemo samo en video z višino in širino, to pomeni, da imamo na strani veljavne videe
       // če trenutni video nima definiranih teh vrednostih, preskočimo vse nadaljnja preverjanja
@@ -109,8 +106,6 @@ class PageInfo {
     }
 
     this.removeDestroyed();
-    
-    // console.log("Rescan complete. Total videos?", this.videos.length)
     }catch(e){
       console.log("rescan error:",e)
     }
