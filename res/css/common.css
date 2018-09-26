@@ -150,11 +150,12 @@ strike {
 .disabled-edge {
   pointer-events: none !important;
   filter: contrast(50%) brightness(40%) grayscale(100%) !important;
-  content: "NOT SUPPORTED IN THIS BROWSER";
 }
-.disabled-edge::after {
-  background-color: #333272;
-  color: #d8d9e6;
+.disabled-edge-tag::after {
+  content: "Not supported in Edge";
+  filter: none !important;
+  background-color: #333272 !important;
+  color: #d8d9e6 !important;
   display: inline-block;
   font-size: .75em;
   font-variant: small-caps;
