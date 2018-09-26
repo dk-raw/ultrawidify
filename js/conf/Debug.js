@@ -7,17 +7,17 @@ Debug = {
   debug: true,
   keyboard: true,
   debugResizer: true,
-  debugArDetect: true,
-  debugStorage: false,
+  debugArDetect: false,
+  debugStorage: true,
   comms: false,
   // showArDetectCanvas: true,
   flushStoredSettings: true,
   // flushStoredSettings: false,
   playerDetectDebug: true,
-  periodic: true,
+  periodic: false,
   videoRescan: true,
   arDetect: {
-    edgeDetect: true
+    edgeDetect: false
   },
   canvas: {
     debugDetection: true

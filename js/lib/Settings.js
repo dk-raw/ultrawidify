@@ -9,7 +9,7 @@ class Settings {
 
     const ths = this;
 
-    if(BrowserDetect.firefox) {
+    if (BrowserDetect.firefox || BrowserDetect.edge) {
       browser.storage.onChanged.addListener( (changes, area) => {
         if (Debug.debug && Debug.debugStorage) {
           console.log("[Settings::<storage/on change>] Settings have been changed outside of here. Updating active settings. Changes:", changes, "storage area:", area);
@@ -116,7 +116,7 @@ class Settings {
       });
       return ret['uwSettings'];
     } else if (BrowserDetect.edge) {
-      const ret = new Promise( (resolve, reject) => {
+      const ret = await new Promise( (resolve, reject) => {
         browser.storage.sync.get('uwSettings', (res) => resolve(res));
       });
       return ret['uwSettings'];

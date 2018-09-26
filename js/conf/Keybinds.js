@@ -3,19 +3,32 @@ if(Debug.debug)
 
 class Keybinds {
   constructor(pageInfo){
+    if (Debug.init) {
+      console.log("[Keybinds::ctor] Creating new keybinds object.");
+    }
     this.pageInfo = pageInfo;
     this.settings = pageInfo.settings;
     this.inputs = ['input','select','button','textarea'];
   }
 
   setup(){
+    if ( (Debug.debug && Debug.keyboard) || Debug.init) {
+      console.log("[Keybinds::setup] Trying to add event listeners ...");
+    }
+
     var ths = this;
+    
+    document.addEventListener('keydown', function(e) {console.log("edge is very special browser")});
+    
     document.addEventListener('keydown',  (event) => ths.handleKeypress(event) );
     document.addEventListener('keyup', (event) => ths.handleKeypress(event,true) );
+
+    if ( (Debug.debug && Debug.keyboard) || Debug.init) {
+      console.log("[Keybinds::setup] Event listeners added.");
+    }
   }
 
   handleKeypress(event, isKeyUp) {          // Tukaj ugotovimo, katero tipko smo pritisnili
-  
     if(Debug.debug  && Debug.keyboard ){
       console.log("%c[Keybinds::_kbd_process] we pressed a key: ", "color: #ff0", event.key , " | keydown: ", event.keydown, "event:", event);
     }
