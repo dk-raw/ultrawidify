@@ -1,5 +1,27 @@
 ﻿# Ultrawidify — aspect ratio fixer for youtube and netflix
 
+# Edge-specific limitations (IMPORTANT!)
+
+For various reasons — most notably, I refuse to pay Microsoft €14 for the privilege of developing shit for their outright broken browser (and in addition to that, the extension needs to go through review process as well) — this extension isn't going to appear on Microsoft Store. (And I do not permit anyone else to do that in my name either). Full rant on why I've made this decision can be found [here](https://github.com/xternal7/ultrawidify/issues/14#issuecomment-424903335).
+
+As a result, you'll have to download the extension and install it manually. This approach has some downsides.
+
+1. You'll get this popup after starting Edge. If you've already opened Youtube or Netflix, **you will have to reload the page (or navigate to somewhere else) in order for extension to start.**
+![slika](https://user-images.githubusercontent.com/12505802/46114175-05912200-c1e1-11e8-91c7-2217f5bf79e3.png)
+
+2. Certain WebExtension APIs that I rely on are outright broken in Edge. This bug would cause global extension settings (tab: Extension settings) and per-site settings (tab: Site settings) to reset to default values every time you'd open the popup. As a result, _Extension settings_ and _Site settings_ tabs are disabled in Edge:
+![Feast on dem popup](https://user-images.githubusercontent.com/12505802/46113923-d1693180-c1df-11e8-82f0-ad64cbc57558.png)
+Unfortunate consequence of this is that you won't be able to enable this extension for sites other than Youtube and Netflix, but then again. Let's be honest. You're only using Edge for Netflix, so that's probably no big deal for you.
+
+## Installing Ultrawidify in M$ Edge
+
+1. Download the zip file from [here](https://github.com/xternal7/ultrawidify/tree/master/releases/edge)
+2. Extract contents of the zip file in some folder. It really doesn't matter where, just keep it somewhere that won't be in your way when using your computer.
+3. Follow the steps in [this guide](https://docs.microsoft.com/en-us/microsoft-edge/extensions/guides/adding-and-removing-extensions)
+
+
+# Resuming standard readme
+
 ## TL;DR
 
 If you own an ultrawide monitor, you have probably noticed that sometimes videos aren't encoded properly — they feature black bars on all four sides. This could happen because someone was incompetent (note: as far as youtube is concerned, improperly rendered videos might be due to youtube's implementation of certain new features). The extension kinda fixes that by doing this:
