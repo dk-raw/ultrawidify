@@ -1,6 +1,8 @@
 // How to use:
 // version: {ExtensionConf object, but only properties that get overwritten}
 import Stretch from '../../common/enums/stretch.enum';
+import ExtensionMode from '../../common/enums/extension-mode.enum';
+import VideoAlignment from '../../common/enums/video-alignment.enum';
 
 const ExtensionConfPatch = [
   {
@@ -297,6 +299,24 @@ const ExtensionConfPatch = [
         });
       } catch (e) {
         console.error("PROBLEM APPLYING SETTINGS", e);
+      }
+    }
+  }, {
+    forVersion: '4.4.3.1',
+    sites: {
+      "www.disneyplus.com": {
+        mode: ExtensionMode.Enabled,
+        autoar: ExtensionMode.Enabled,
+        autoarFallback: ExtensionMode.Enabled,
+        override: true,                  // ignore value localStorage in favour of this
+        stretch: Stretch.Default,
+        videoAlignment: VideoAlignment.Default,
+        keyboardShortcutsEnabled: ExtensionMode.Default,
+        DOM: {
+          player: {
+            periodicallyRefreshPlayerElement: true,
+          }
+        }
       }
     }
   }

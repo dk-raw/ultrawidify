@@ -35,6 +35,9 @@ class Settings {
   }
 
   storageChangeListener(changes, area) {
+    if (!changes.uwSettings) {
+      return;
+    }
     this.logger.log('info', 'settings', "[Settings::<storage/on change>] Settings have been changed outside of here. Updating active settings. Changes:", changes, "storage area:", area);
     if (changes['uwSettings'] && changes['uwSettings'].newValue) {
       this.logger.log('info', 'settings',"[Settings::<storage/on change>] new settings object:", JSON.parse(changes.uwSettings.newValue));
@@ -282,10 +285,35 @@ class Settings {
     }
   }
 
+  fixSitesSettings(sites) {
+    for (const site in sites) {
+      if (site === '@global') {
+        continue;
+      }
+      if (sites[site].mode === undefined) {
+        sites[site].mode = ExtensionMode.Default;
+      }
+      if (sites[site].autoar === undefined) {
+        sites[site].mode = ExtensionMode.Default;
+      }
+      if (sites[site].stretch === undefined) {
+        sites[site].mode = Stretch.Default;
+      }
+      if (sites[site].videoAlignment === undefined) {
+        sites[site].mode = VideoAlignment.Default;
+      }
+      if (sites[site].keyboardShortcutsEnabled === undefined) {
+        sites[site].mode = ExtensionMode.Default;
+      }
+    }
+  }
+
   async set(extensionConf, options) {
     if (!options || !options.forcePreserveVersion) {
       extensionConf.version = this.version;
     }
+
+    this.fixSitesSettings(extensionConf.sites);
 
     this.logger.log('info', 'settings', "[Settings::set] setting new settings:", extensionConf)
 
@@ -377,10 +405,14 @@ class Settings {
         return ExtensionMode.Enabled;
       } else if (this.active.sites[site].mode === ExtensionMode.Basic) {
         return ExtensionMode.Basic;            
-      } else if (this.active.sites[site].mode === ExtensionMode.Default && site !== '@global') {
-        return this.getExtensionMode('@global');
-      } else {
+      }  else if (this.active.sites[site].mode === ExtensionMode.Disabled) {
         return ExtensionMode.Disabled;
+      } else {
+        if (site !== '@global') {
+          return this.getExtensionMode('@global');
+        } else {
+          return ExtensionMode.Disabled;
+        }
       }
   
     } catch(e){
@@ -526,7 +558,7 @@ class Settings {
   }
 
   getDefaultStretchMode(site) {
-    if (site && this.active.sites[site] && this.active.sites[site].stretch !== Stretch.Default) {
+    if (site && this.active.sites[site]?.stretch !== Stretch.Default) {
       return this.active.sites[site].stretch;
     }
 
@@ -534,7 +566,7 @@ class Settings {
   }
 
   getDefaultCropPersistenceMode(site) {
-    if (site && this.active.sites[site] && this.active.sites[site].cropModePersistence !== Stretch.Default) {
+    if (site && this.active.sites[site]?.cropModePersistence !== Stretch.Default) {
       return this.active.sites[site].cropModePersistence;
     }
 
@@ -543,7 +575,7 @@ class Settings {
   }
 
   getDefaultVideoAlignment(site) {
-    if (site && this.active.sites[site] && this.active.sites[site].videoAlignment !== VideoAlignment.Default) {
+    if (this.active.sites[site]?.videoAlignment !== VideoAlignment.Default) {
       return this.active.sites[site].videoAlignment;
     }
 

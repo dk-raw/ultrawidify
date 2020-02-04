@@ -60,6 +60,11 @@ const config = {
           name: '[path][name].[ext]',
         },
       },
+      {
+        test: /\.js$/,
+        exclude: /node_modules/,
+        loader: "babel-loader"
+      },
     ],
   },
   plugins: [
@@ -130,7 +135,8 @@ const config = {
       onBuildEnd: ['node scripts/remove-evals.js'],
     }),
     new webpack.DefinePlugin({
-      'process.env.BROWSER': JSON.stringify(process.env.BROWSER)
+      'process.env.BROWSER': JSON.stringify(process.env.BROWSER),
+      'process.env.CHANNEL': JSON.stringify(process.env.CHANNEL)
     })
   ],
 };
