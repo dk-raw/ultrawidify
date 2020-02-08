@@ -17,7 +17,7 @@ const config = {
     'options/options': './options/options.js',
   },
   output: {
-    path: __dirname + '/dist',
+    path: __dirname + `/dist-${process.env.BROWSER == 'firefox' ? 'ff' : process.env.BROWSER}`,
     filename: '[name].js',
   },
   resolve: {
@@ -74,7 +74,7 @@ const config = {
     }),
     new CopyWebpackPlugin([
       { from: 'res', to: 'res'},
-      { from: 'ext', to: 'ext'},
+      { from: 'ext', to: 'ext', ignore: ['conf/*', 'lib/**']},
       { from: 'icons', to: 'icons', ignore: ['icon.xcf'] },
       { from: 'popup/popup.html', to: 'popup/popup.html', transform: transformHtml },
       { from: 'options/options.html', to: 'options/options.html', transform: transformHtml },

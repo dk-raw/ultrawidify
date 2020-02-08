@@ -8,7 +8,8 @@
         <div class="button flex-noshrink button-header"
             @click="hidePopup()"
         >
-          Close
+          <template v-if="logStringified">Finish logging</template>
+          <template v-else>Hide popup</template>
         </div>
         <!-- <div class="button flex-noshrink button-header"
              @click="stopLogging()"
@@ -77,7 +78,7 @@
             <div class="button button-bar button-primary"
                  @click="exportAndQuit()"
             >
-              Export & quit
+              Export & finish
             </div>
           </div>
         </template>
@@ -190,14 +191,14 @@ export default {
     updateSettings(val) {
       try {
         this.parsedSettings = JSON.stringify(JSON.parse(val.target.textContent.trim()), null, 2);
-        // this.lastSettings = JSON.parse(val.target.textContent.trim());
+        this.lastSettings = JSON.parse(val.target.textContent.trim());
         this.confHasError = false;
       } catch (e) {
         this.confHasError = true;
       }
     },
     restoreLoggerSettings() {
-      this.parsedSettings = JSON.stringify(this.lastSettings, null, 2);
+      this.getLoggerSettings();
       this.confHasError = false;
     },
     async startLogging(){
@@ -237,9 +238,10 @@ export default {
 <style lang="scss" scoped>
 @import '../res/css/colors.scss';
 @import '../res/css/font/overpass.css';
-@import url('/res/css/font/overpass-mono.css');
-@import url('/res/css/common.scss');
-@import url('/res/css/flex.css');
+@import '../res/css/font/overpass-mono.css';
+@import '../res/css/common.scss';
+@import '../res/css/flex.css';
+
 
 .root-window {
   position: fixed !important;
