@@ -59,9 +59,15 @@
   "permissions": [
     "storage",
     "activeTab",
-    "<all_urls>"
+    "*://*.youtube.com/*",
+    "*://*.vimeo.com/*",
+    "*://*.twitch.com/*",
+    "*://*.netflix.com/*"
   ],
   "optional_permissions": [
-    "downloads"
+    "http://*/",
+    "https://*/",
+    "downloads",
+    "<all_urls>"
   ]
 }
