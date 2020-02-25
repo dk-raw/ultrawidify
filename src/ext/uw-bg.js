@@ -240,3 +240,22 @@ class UWServer {
 }
 
 var server = new UWServer();
+
+// Handle opening new tabs on extension upgrades and new installs
+if (BrowserDetect.firefox) {
+  // todo
+} else if (BrowserDetect.chrome) {
+  chrome.runtime.onInstalled.addListener( (details) => {
+    if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
+      chrome.tabs.create({
+        url: chrome.extension.getURL("install/first-time/first-time.html"),
+        active: true,
+      }, () => {
+        // do nothing after the tab opens
+        console.log("tab opened!");
+      });
+    } else {
+      console.log("EXTENSION UPDATED (prolly)!");
+    }
+  });
+}
