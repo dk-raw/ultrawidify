@@ -4,6 +4,8 @@ import CommsServer from './lib/comms/CommsServer';
 import Settings from './lib/Settings';
 import Logger from './lib/Logger';
 
+import sleep from '../common/js/utils';
+
 var BgVars = {
   arIsActive: true,
   hasVideos: false,
@@ -49,6 +51,9 @@ class UWServer {
     this.settings = new Settings({logger: this.logger});
     await this.settings.init();
     this.comms = new CommsServer(this);
+    this.comms.subscribe('show-logger', async () => await this.initUi());
+    this.comms.subscribe('init-vue', async () => await this.initUi());
+
 
     var ths = this;
     if(BrowserDetect.firefox) {
@@ -198,6 +203,26 @@ class UWServer {
     this.selectedSubitem[menu] = subitem;
   }
 
+  async initUi() {
+    try {
+      if (BrowserDetect.firefox) {
+        await browser.tabs.executeScript({
+          file: '/ext/uw-ui.js',
+          allFrames: true,
+        });
+      } else if (BrowserDetect.chrome) {
+        await new Promise( resolve => 
+          chrome.tabs.executeScript({
+            file: '/ext/uw-ui.js',
+            allFrames: true,
+          }, () => resolve())
+        );
+      }
+    } catch (e) {
+      this.logger.log('ERROR', 'uwbg', 'UI initialization failed. Reason:', e);
+    }
+  }
+
   async getCurrentTab() {
     if (BrowserDetect.firefox) {
       return (await browser.tabs.query({active: true, currentWindow: true}))[0];
@@ -211,8 +236,6 @@ class UWServer {
     // there won't be anything in this.videoTabs[this.currentTabId]
 
     const ctab = await this.getCurrentTab();
-
-    console.log('Current tab:', ctab);
 
     if (!ctab || !ctab.id) {
       return {

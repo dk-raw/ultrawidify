@@ -52,14 +52,15 @@ class Settings {
     }
   }
 
-  getExtensionVersion() {
+  static getExtensionVersion() {
     if (currentBrowser.firefox) {
       return browser.runtime.getManifest().version;
     } else if (currentBrowser.chrome) {
       return chrome.runtime.getManifest().version;
-    } else if (currentBrowser.edge) {
-      return browser.runtime.getManifest().version;
-    }
+    } 
+  }
+  getExtensionVersion() {
+    return Settings.getExtensionVersion(); 
   }
 
   compareExtensionVersions(a, b) {
@@ -155,7 +156,6 @@ class Settings {
         try {
           updateFn(this.active, this.getDefaultSettings());
         } catch (e) {
-          console.log("!!!!", e)
           this.logger.log('error', 'settings', '[Settings::applySettingsPatches] Failed to execute update function. Keeping settings object as-is. Error:', e);
         }
       }
@@ -290,16 +290,16 @@ class Settings {
         sites[site].mode = ExtensionMode.Default;
       }
       if (sites[site].autoar === undefined) {
-        sites[site].mode = ExtensionMode.Default;
+        sites[site].autoar = ExtensionMode.Default;
       }
       if (sites[site].stretch === undefined) {
-        sites[site].mode = Stretch.Default;
+        sites[site].stretch = Stretch.Default;
       }
       if (sites[site].videoAlignment === undefined) {
-        sites[site].mode = VideoAlignment.Default;
+        sites[site].videoAlignment = VideoAlignment.Default;
       }
       if (sites[site].keyboardShortcutsEnabled === undefined) {
-        sites[site].mode = ExtensionMode.Default;
+        sites[site].keyboardShortcutsEnabled = ExtensionMode.Default;
       }
     }
   }
