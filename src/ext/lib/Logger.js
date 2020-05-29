@@ -1,5 +1,10 @@
 import currentBrowser from '../conf/BrowserDetect';
 import { decycle } from 'json-cyclic';
+import Comms from './comms/Comms';
+
+if (process.env.CHANNEL !== 'stable'){
+  console.log('Loading Logger');
+}
 
 class Logger {
   constructor(options) {
@@ -104,8 +109,8 @@ class Logger {
           // console.info('[Logger::<storage/on change> No new logger settings!');
         }
         if (changes['uwLogger'] && changes['uwLogger'].newValue) {
-          console.log("[Logger::<storage/on change>] Logger have been changed outside of here. Updating active settings. Changes:", changes, "storage area:", area);
-          console.info("[Logger::<storage/on change>] new logger settings object (parsed):", JSON.parse(changes.uwLogger.newValue));
+          // console.log("[Logger::<storage/on change>] Logger have been changed outside of here. Updating active settings. Changes:", changes, "storage area:", area);
+          // console.info("[Logger::<storage/on change>] new logger settings object (parsed):", JSON.parse(changes.uwLogger.newValue));
         }
       }
       if (!changes['uwLogger']) {
@@ -202,7 +207,7 @@ class Logger {
     // } else {
       // this.exportLogToFile();
     }
-    this.saveToVuex();
+    this.saveViaBgScript();
   }
 
   parseStack() {
@@ -222,29 +227,21 @@ class Logger {
     stackInfo['mousemove'] = false;
     stackInfo['exitLogs'] = false;
 
-    // here we check which source triggered the action. We know that only one of these
-    // functions will appear in the trace at most once (and if more than one of these
-    // appears — e.g. frameCheck triggered by user toggling autodetection in popup —
-    // the most recent one will be the correct one 99% of the time)
+    // here we check which source triggered the action. There can be more
+    // than one source, too, so we don't break when we find the first one
     for (const line of stackInfo.stack.trace) {
       if (line === 'doPeriodicPlayerElementChangeCheck') {
         stackInfo['periodicPlayerCheck'] = true;
-        break;
       } else if (line === 'doPeriodicFallbackChangeDetectionCheck') {
         stackInfo['periodicVideoStyleChangeCheck'] = true;
-        break;
       } else if (line === 'frameCheck') {
         stackInfo['aard'] = true;
-        break;
       } else if (line === 'execAction') {
         stackInfo['keyboard'] = true;
-        break;
       } else if (line === 'processReceivedMessage') {
         stackInfo['popup'] = true;
-        break;
       } else if (line === 'handleMouseMove') {
         stackInfo['mousemove'] = true;
-        break;
       }
     }
 
@@ -457,6 +454,10 @@ class Logger {
     }
   }
 
+  appendLog(logs) {
+    this.history = this.history.concat(logs);
+  }
+
   addLogFromPage(host, tabId, frameId, pageHistory) {
     if (! this.globalHistory[host]) {
       this.globalHistory[host] = {};
@@ -468,6 +469,34 @@ class Logger {
       this.globalHistory[host][tabId || 'tab'][frameId || 'top'] = pageHistory;
     } else {
       this.globalHistory[host][tabId || 'tab'][frameId || 'top'].push(...pageHistory);
+    }
+  }
+
+  saveViaBgScript() {
+    console.info('[info] will attempt to save. Issuing "show-logger"');
+    if (!this.conf?.fileOptions?.enabled || this.isBackgroundScript) {
+      console.info('[info] Logging to file is either disabled or we\'re not on the content script. Not saving.');
+      return;
+    }
+
+    Comms.sendMessage({cmd: 'show-logger', forwardToSameFramePort: true, port: 'content-ui-port'});
+
+    let exportObject; 
+    try {
+      exportObject = {
+        pageLogs: decycle(this.history),
+        backgroundLogs: decycle(this.globalHistory),
+        loggerFileOptions: this.conf.fileOptions,
+      }
+    } catch (e) {
+      console.error("[fail] error parsing logs!", e)
+      return;
+    }
+
+    try {
+    Comms.sendMessage({cmd: 'emit-logs', payload: JSON.stringify(exportObject), forwardToSameFramePort: true, port: 'content-ui-port'})
+    } catch (e) {
+      console.log("failed to send message")
     }
   }
 
@@ -512,6 +541,10 @@ class Logger {
 
     console.info('[info] Export object saved to vuex store.')
   }
+}
+
+if (process.env.CHANNEL !== 'stable'){
+  console.log('Logger loaded');
 }
 
 export default Logger;

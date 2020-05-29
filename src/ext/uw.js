@@ -1,15 +1,26 @@
 import Debug from './conf/Debug';
 import BrowserDetect from './conf/BrowserDetect';
-import ExtensionMode from '../common/enums/extension-mode.enum'
+import ExtensionMode from '../common/enums/extension-mode.enum';
 import Settings from './lib/Settings';
 import ActionHandler from './lib/ActionHandler';
+import Comms from './lib/comms/Comms';
 import CommsClient from './lib/comms/CommsClient';
 import PageInfo from './lib/video-data/PageInfo';
 import Logger from './lib/Logger';
 
 
 if(Debug.debug){
-  console.log("Sᴛλʀᴛɪɴɢ  Uʟᴛʀᴀᴡɪᴅɪꜰʏ UI");
+  console.log("\n\n\n\n\n\n           ———    Sᴛλʀᴛɪɴɢ  Uʟᴛʀᴀᴡɪᴅɪꜰʏ    ———\n               <<   ʟᴏᴀᴅɪɴɢ ᴍᴀɪɴ ꜰɪʟᴇ   >>\n\n\n\n");
+  try {
+    if(window.self !== window.top){
+      console.log("%cWe aren't in an iframe.", "color: #afc, background: #174");
+    }
+    else{
+      console.log("%cWe are in an iframe!", "color: #fea, background: #d31", window.self, window.top);
+    }
+  } catch (e) {
+    console.log("%cWe are in an iframe!", "color: #fea, background: #d31");
+  }
 }
 
 if (BrowserDetect.edge) {
@@ -101,21 +112,12 @@ class UW {
         this.logger = new Logger();
         await this.logger.init(loggingOptions);
 
-        if (this.logger.isLoggingAllowed()) {
-          console.info("[uw::init] Logging is allowed! Initalizing vue and UI!");
-          this.initVue();
-          this.initUi();
-          this.logger.setVuexStore(this.vuexStore);
-        }
-
         // show popup if logging to file is enabled
-        if (this.logger.isLoggingToFile()) {
-          console.info('[uw::init] Logging to file is enabled. Will show popup!');
-          try {
-            this.vuexStore.dispatch('uw-show-logger');
-          } catch (e) {
-            console.error('[uw::init] Failed to open popup!', e)
-          }
+        if (this.logger.isLoggingAllowed() && this.logger.isLoggingToFile()) {
+          console.info("[uw::init] Logging is allowed! Initalizing vue and UI!");
+
+          // CommsClient is not initiated yet, so we use static comms to send the command
+          Comms.sendMessage({cmd: 'show-logger'});
         }
       }
     } catch (e) {
@@ -134,7 +136,7 @@ class UW {
       await this.settings.init();
     }
   
-    this.comms = new CommsClient('content-ui-port', this.logger, this.commsHandlers);
+    this.comms = new CommsClient('content-main-port', this.logger, this.commsHandlers);
 
     // če smo razširitev onemogočili v nastavitvah, ne naredimo ničesar
     // If extension is soft-disabled, don't do shit
@@ -169,8 +171,6 @@ class UW {
     } catch (e) {
       this.logger.log('error', 'debug', "[uw::init] FAILED TO START EXTENSION. Error:", e);
     }
-
-    console.log("....")
   }
 
  

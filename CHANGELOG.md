@@ -13,7 +13,28 @@ QoL improvements for me:
 
 * logging: allow to enable logging at will and export said logs to a file
 
-### v4.4.5 (current)
+### v4.4.8 (Current)
+
+* Fixed the bug where on pages with more than one video, the list of available videos in the extension popup wouldn't remove videos that are no longer displayed on site. This resulted in extension listing videos that were no longer on the page. Reboot or navigation would also not clear the list if navigating between various pages on the same host.
+* Fixed the chrome-only bug where on sites with more than one video, the number wouldn't get hidden when the extension popup closed.
+
+### v4.4.7
+
+* Removed unnecessary font files and image files from the package.
+* LoggerUI is now functional.
+* **[4.4.7.1]** Additional CSS fixes
+* **[4.4.7.1]** Bruteforce fix for youtube alignment issue
+* **[4.4.7.2]** Bruteforce fix for youtube alignment issue — increase number of retries
+
+### v4.4.6
+
+* Ensured that Vue part of the content script (logger UI) only loads when necessary in order to fix breakage on certain sites (#96).
+* Disabling (or enabling, if running in whitelist-only mode) specific sites used to not work (#91). This issue appears to have been fixed.
+* Default stretch mode for sites is now probably being observed, too (#94).
+* Fixed netflix (and possibly disney+ )
+* It's been almost a month and Chrome Web Store still hasn't finished the review of the 4.4.4.1 (and 4.4.4.2) revisions because when it comes to incompetence, it's hard to expect anything less from Google. I've did some proverbial yelling at the support in hopes that Chrome version will finally see an update (disclaimer: when I said yelling I really mean a polite request, because support staff doesn't deserve abuse because a different department is utter shite at doing their jobs).
+
+### v4.4.5 
 
 * Extension no longer requires `allTabs` and `webNavigation` permissions
 * Some CSS on the debugger popup was not scoped, causing issues with some sites.

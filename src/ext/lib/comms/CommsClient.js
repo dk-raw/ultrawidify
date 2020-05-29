@@ -1,6 +1,10 @@
 import Debug from '../../conf/Debug';
 import BrowserDetect from '../../conf/BrowserDetect';
 
+if (process.env.CHANNEL !== 'stable'){
+  console.log("Loading CommsClient");
+}
+
 class CommsClient {
   constructor(name, logger, commands) {
     this.logger = logger;
@@ -9,8 +13,6 @@ class CommsClient {
       this.port = browser.runtime.connect({name: name});
     } else if (BrowserDetect.chrome) {
       this.port = chrome.runtime.connect({name: name});
-    } else if (BrowserDetect.edge) {
-      this.port = browser.runtime.connect({name: name})
     }
 
     this.logger.onLogEnd(
@@ -121,10 +123,14 @@ class CommsClient {
 
   announceZoom(scale){
     this.port.postMessage({cmd: "announce-zoom", zoom: scale});
-    this.registerVideo()
+    this.registerVideo();
   }
 
 
+}
+
+if (process.env.CHANNEL !== 'stable'){
+  console.log("CommsClient loaded");
 }
 
 export default CommsClient;

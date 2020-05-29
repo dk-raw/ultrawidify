@@ -4,7 +4,15 @@ import CommsServer from './lib/comms/CommsServer';
 import Settings from './lib/Settings';
 import Logger from './lib/Logger';
 
-import sleep from '../common/js/utils';
+import { sleep } from '../common/js/utils';
+
+// we need vue in bg script, so we can get vuex.
+// and we need vuex so popup will be initialized 
+// after the first click without resorting to ugly,
+// dirty hacks
+import Vue from 'vue';
+import Vuex from 'vuex';
+import VuexWebExtensions from 'vuex-webextensions';
 
 var BgVars = {
   arIsActive: true,
@@ -29,6 +37,8 @@ class UWServer {
       'siteSettings': undefined,
       'videoSettings': undefined,
     }
+
+    this.uiLoggerInitialized = false;
   }
 
   async setup() {
@@ -51,15 +61,16 @@ class UWServer {
     this.settings = new Settings({logger: this.logger});
     await this.settings.init();
     this.comms = new CommsServer(this);
-    this.comms.subscribe('show-logger', async () => await this.initUi());
+    this.comms.subscribe('show-logger', async () => await this.initUiAndShowLogger());
     this.comms.subscribe('init-vue', async () => await this.initUi());
+    this.comms.subscribe('uwui-vue-initialized', () => this.uiLoggerInitialized = true);
+    this.comms.subscribe('emit-logs', () => {});  // we don't need to do anything, this gets forwarded to UI content script as is
 
 
-    var ths = this;
     if(BrowserDetect.firefox) {
-      browser.tabs.onActivated.addListener(function(m) {ths.onTabSwitched(m)});  
+      browser.tabs.onActivated.addListener((m) => {this.onTabSwitched(m)});  
     } else if (BrowserDetect.chrome) {
-      chrome.tabs.onActivated.addListener(function(m) {ths.onTabSwitched(m)});
+      chrome.tabs.onActivated.addListener((m) => {this.onTabSwitched(m)});
     }
   }
 
@@ -103,6 +114,10 @@ class UWServer {
   extractHostname(url){
     var hostname;
     
+    if (!url) {
+      return "<no url>";
+    }
+
     // extract hostname  
     if (url.indexOf("://") > -1) {    //find & remove protocol (http, ftp, etc.) and get hostname
       hostname = url.split('/')[2];
@@ -158,14 +173,11 @@ class UWServer {
     }
 
     if (this.videoTabs[sender.tab.id]) {
-      if (this.videoTabs[sender.tab.id].frames[sender.frameId]) {
-        return; // existing value is fine, no need to act
-      } else {
-        this.videoTabs[sender.tab.id].frames[sender.frameId] = {
-          id: sender.frameId,
-          host: frameHostname,
-          url: sender.url
-        }
+      this.videoTabs[sender.tab.id].frames[sender.frameId] = {
+        id: sender.frameId,
+        host: frameHostname,
+        url: sender.url,
+        registerTime: Date.now(),
       }
     } else {
       this.videoTabs[sender.tab.id] = {
@@ -177,7 +189,8 @@ class UWServer {
       this.videoTabs[sender.tab.id].frames[sender.frameId] = {
         id: sender.frameId,
         host: frameHostname,
-        url: sender.url
+        url: sender.url,
+        registerTime: Date.now(),
       }
     }
 
@@ -218,9 +231,39 @@ class UWServer {
           }, () => resolve())
         );
       }
+      
     } catch (e) {
       this.logger.log('ERROR', 'uwbg', 'UI initialization failed. Reason:', e);
     }
+  }
+
+  async initUiAndShowLogger() {
+    // this implementation is less than optimal and very hacky, but it should work
+    // just fine for our use case.
+    this.uiLoggerInitialized = false;
+
+    await this.initUi();
+
+    await new Promise( async (resolve, reject) => {
+      // if content script doesn't give us a response within 5 seconds, something is 
+      // obviously wrong and we stop waiting,
+
+      // oh and btw, resolve/reject do not break the loops, so we need to do that 
+      // ourselves:
+      // https://stackoverflow.com/questions/55207256/will-resolve-in-promise-loop-break-loop-iteration
+      let isRejected = false;
+      setTimeout( async () => {isRejected = true; reject()}, 5000);
+
+      // check whether UI has been initiated on the FE. If it was, we resolve the 
+      // promise and off we go
+      while (!isRejected) {
+        if (this.uiLoggerInitialized) {
+          resolve();
+          return;        // remember the bit about resolve() not breaking the loop?
+        }
+        await sleep(100);
+      }
+    })
   }
 
   async getCurrentTab() {
@@ -245,6 +288,25 @@ class UWServer {
     }
 
     if (this.videoTabs[ctab.id]) {
+      // if video is older than PageInfo's video rescan period (+ 4000ms of grace),
+      // we clean it up from videoTabs[tabId].frames array.
+      const ageLimit = Date.now() - this.settings.active.pageInfo.timeouts.rescan - 4000;
+      console.log("videoTabs[tabId]:", this.videoTabs[ctab.id])
+      try {
+        for (const key in this.videoTabs[ctab.id].frames) {
+          if (this.videoTabs[ctab.id].frames[key].registerTime < ageLimit) {
+            delete this.videoTabs[ctab.id].frames[key];
+          }
+        }
+      } catch (e) {
+        // something went wrong. There's prolly no frames.
+        return {
+          host: this.extractHostname(ctab.url),
+          frames: [],
+          selected: this.selectedSubitem
+        }
+      }
+
       return {
         ...this.videoTabs[ctab.id],
         host: this.extractHostname(ctab.url),
@@ -260,6 +322,15 @@ class UWServer {
       selected: this.selectedSubitem
     }
   }
+
+  // chrome shitiness mitigation 
+  sendUnmarkPlayer(message) {
+    this.comms.sendUnmarkPlayer(message);
+  }
 }
 
 var server = new UWServer();
+
+window.sendUnmarkPlayer = (message) => {
+  server.sendUnmarkPlayer(message)
+}

@@ -25,7 +25,7 @@
       <div><small>You can change or add additional aspect ratios on <a href="#" @click="openOptionsPage()">the settings page</a> (in 'actions&shortcuts' menu).</small></div>
     </div>
 
-    <div v-if="true"
+    <div v-if="false"
          class="">
       <div class="label experimental">Zooming and panning</div>
       <div class="row"
@@ -157,7 +157,7 @@ export default {
   },
   methods: {
     async openOptionsPage() {
-      browser.runtime.openOptionsPage();
+      (browser ?? chrome).runtime.openOptionsPage();
     },
     execAction(action) {
       this.exec.exec(action, 'page', this.frame);

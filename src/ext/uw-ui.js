@@ -8,6 +8,7 @@ import LoggerUi from '../csui/LoggerUi';
 import Logger from './lib/Logger';
 import Settings from './lib/Settings';
 import CommsClient from './lib/comms/CommsClient';
+import Comms from './lib/comms/Comms';
 
 class UwUi {
 
@@ -21,6 +22,7 @@ class UwUi {
     this.commsHandlers = {
       'show-logger': [() => this.showLogger()],
       'hide-logger': [() => this.hideLogger()],
+      'emit-logs'  : [(message) => this.addLogs(message)]
     }
   }
 
@@ -31,8 +33,8 @@ class UwUi {
     //     * if video/player is detected (which can only happen if extension is enabled
     //       for that particular site)
 
-    // initialize vuejs, but only once (check handled in initVue())
-    this.initVue();
+    // NOTE: we need to setup logger and comms _before_ initializing vue (unless we're starting)
+    // because logger settings say we should
 
     // setup logger
     try {
@@ -74,7 +76,7 @@ class UwUi {
         if (this.logger.isLoggingAllowed()) {
           console.info("[uw::init] Logging is allowed! Initalizing vue and UI!");
           this.initVue();
-          this.initUi();
+          this.initLoggerUi();
           this.logger.setVuexStore(this.vuexStore);
         }
 
@@ -107,53 +109,74 @@ class UwUi {
     }
 
     this.comms = new CommsClient('content-ui-port', this.logger, this.commsHandlers);
+
+    // initialize vuejs, but only once (check handled in initVue())
+    // we need to initialize this _after_ initializing comms.
+    this.initVue();
   }
 
   initVue() {
     // never init twice
     if (this.vueInitiated) {
+      // let background script know it can proceed with sending 'show-logger' command.
+      Comms.sendMessage({cmd: 'uwui-vue-initialized'});
       return;
     }
 
-    Vue.prototype.$browser = global.browser;
-    Vue.use(Vuex);
-    this.vuexStore = new Vuex.Store({
-      plugins: [VuexWebExtensions({
-        persistentStates: [
-          'uwLog',
-          'showLogger',
-        ],
-      })],
-      state: {
-        uwLog: '',
-        showLogger: false,
-      },
-      mutations: {
-        'uw-set-log'(state, payload) {
-          state['uwLog'] = payload;
+    try {
+      Vue.prototype.$browser = global.browser;
+      Vue.use(Vuex);
+      this.vuexStore = new Vuex.Store({
+        plugins: [VuexWebExtensions({
+          persistentStates: [
+            'uwLog',
+            'showLogger',
+            'loggingEnded',
+          ],
+        })],
+        state: {
+          uwLog: '',
+          showLogger: false,
+          loggingEnded: false,
         },
-        'uw-show-logger'(state) {
-          state['showLogger'] = true;
+        mutations: {
+          'uw-set-log'(state, payload) {
+            state['uwLog'] = payload;
+          },
+          'uw-show-logger'(state) {
+            state['showLogger'] = true;
+          },
+          'uw-hide-logger'(state) {
+            state['showLogger'] = false;
+          },
+          'uw-logging-ended'(state) {
+            state['loggingEnded'] = state;
+          }
         },
-        'uw-hide-logger'(state) {
-          state['showLogger'] = false;
+        actions: {
+          'uw-set-log' ({commit}, payload) {
+            commit('uw-set-log', payload);
+          },
+          'uw-show-logger'({commit}) {
+            commit('uw-show-logger');
+          },
+          'uw-hide-logger'({commit}) {
+            commit('uw-hide-logger');
+          },
+          'uw-logging-ended'({commit}, payload) {
+            commit('uw-logging-ended', payload);
+          }
         }
-      },
-      actions: {
-        'uw-set-log' ({commit}, payload) {
-          commit('uw-set-log', payload);
-        },
-        'uw-show-logger'({commit}) {
-          commit('uw-show-logger');
-        },
-        'uw-hide-logger'({commit}) {
-          commit('uw-hide-logger');
-        }
-      }
-    });
+      });
+    } catch (e) {
+      console.error("Ultrawidify failed to initialize vue. Error:", e);
+    }
 
     // make sure we don't init twice
     this.vueInitiated = true;
+
+    // let background script know it can proceed with sending 'show-logger' command.
+    Comms.sendMessage({cmd: 'uwui-vue-initialized'});
   }
 
   async initLoggerUi() {
@@ -188,6 +211,7 @@ class UwUi {
     if (!this.loggerUiInitiated) {
       await this.initLoggerUi();
     }
+
     
     try {
       this.vuexStore.dispatch('uw-show-logger');
@@ -198,6 +222,17 @@ class UwUi {
   hideLogger() {
     if (this.vueInitiated && this.vuexStore !== undefined) {
       this.vuexStore.dispatch('uw-hide-logger');
+    }
+  }
+
+  addLogs(message) {
+    this.logger.appendLog(JSON.parse(message.payload));
+
+    // since this gets called _after_ logging has been finished,
+    // we also inform logger UI to save current settings
+    if (this.vueInitiated && this.vuexStore !== undefined) {
+      console.log("got add logs. payload:", message.payload);
+      this.vuexStore.dispatch('uw-logging-ended', true);
     }
   }
 }
@@ -215,5 +250,8 @@ if (! document.getElementById(markerId)) {
 
   const uwui = new UwUi();
   uwui.init();
+} else {
+  // let background script know it can proceed with sending 'show-logger' command.
+  Comms.sendMessage({cmd: 'uwui-vue-initialized'});
 }
 
