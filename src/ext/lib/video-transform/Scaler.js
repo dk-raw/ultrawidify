@@ -32,10 +32,9 @@ class Scaler {
     }
 
     
-    if(! this.conf.player.dimensions ){
+    if (!this.conf.player.dimensions) {
       ratioOut = screen.width / screen.height;
-    }
-    else {
+    } else {
       ratioOut = this.conf.player.dimensions.width / this.conf.player.dimensions.height;
     }
     
@@ -47,17 +46,17 @@ class Scaler {
     
     var fileAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
       
-    if (ar.type === AspectRatio.FitWidth){
+    if (ar.type === AspectRatio.FitWidth) {
       ratioOut > fileAr ? ratioOut : fileAr
       ar.ratio = ratioOut;
       return ratioOut;
     }
-    else if(ar.type === AspectRatio.FitHeight){
+    else if (ar.type === AspectRatio.FitHeight) {
       ratioOut < fileAr ? ratioOut : fileAr
       ar.ratio = ratioOut;
       return ratioOut;
     }
-    else if(ar.type === AspectRatio.Reset){
+    else if (ar.type === AspectRatio.Reset) {
       this.logger.log('info', 'debug', "[Scaler.js::modeToAr] Using original aspect ratio -", fileAr)
       ar.ar = fileAr;
       return fileAr;
@@ -67,6 +66,40 @@ class Scaler {
   }
 
   calculateCrop(ar) {
+    /**
+     * STEP 1: NORMALIZE ASPECT RATIO
+     *
+     * Video width is normalized based on 100% of the parent. That means if the player AR 
+     * is narrower than video ar, we need to pre-downscale the video. This scaling already
+     * undoes any zoom that style="height:123%" on the video element adds. 
+     * 
+     * There are few exceptions and additional caveatss:
+     *   * AspectRatio.FitHeight: we don't want to pre-downscale the video at all, as things
+     *     will be scaled to fit height as-is.
+     *   * When player is wider than stream, we want to undo any height compensations site
+     *     tacks on the video tag.
+     * 
+     * Quick notes:
+     *   * when I say 'video AR', I actually mean aspect ratio after we've compensated for
+     *     any possible 'height:' stuffs in the style attribute of the video tag
+     *   * because video width is normalized on 100% of the parent, we don't need to correct
+     *     anything when the player is wider than the video.
+     */
+    const streamAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
+    const playerAr = this.conf.player.dimensions.width / this.conf.player.dimensions.height;
+    const heightCompensationFactor = this.conf.getHeightCompensationFactor();
+    const compensatedStreamAr = streamAr * heightCompensationFactor;
+
+    let arCorrectionFactor = 1;
+
+    if (ar.type !== AspectRatio.FitHeight) {
+      if (playerAr < compensatedStreamAr) {
+        arCorrectionFactor = this.conf.player.dimensions.width / this.conf.video.offsetWidth;
+      } else if (ar.type !== AspectRatio.Reset) {
+        arCorrectionFactor /= heightCompensationFactor;
+      }
+    }
+
     if(!this.conf.video){
       this.logger.log('info', 'debug', "[Scaler::calculateCrop] ERROR — no video detected. Conf:", this.conf, "video:", this.conf.video, "video dimensions:", this.conf.video && this.conf.video.videoWidth, '×', this.conf.video && this.conf.video.videoHeight);
       
@@ -82,7 +115,7 @@ class Scaler {
     }
 
     if (ar.type === AspectRatio.Reset){
-      return {xFactor: 1, yFactor: 1}
+      return {xFactor: arCorrectionFactor, yFactor: arCorrectionFactor}
     }
 
     // handle fuckie-wuckies
@@ -103,15 +136,13 @@ class Scaler {
 
     // Dejansko razmerje stranic datoteke/<video> značke
     // Actual aspect ratio of the file/<video> tag
-    var fileAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
-    var playerAr = this.conf.player.dimensions.width / this.conf.player.dimensions.height;
 
     if (ar.type === AspectRatio.Initial || !ar.ratio) {
-      ar.ratio = fileAr;
+      ar.ratio = streamAr;
     }
 
   
-    this.logger.log('info', 'scaler', "[Scaler::calculateCrop] ar is " ,ar.ratio, ", file ar is", fileAr, ", this.conf.player.dimensions are ", this.conf.player.dimensions.width, "×", this.conf.player.dimensions.height, "| obj:", this.conf.player.dimensions);
+    this.logger.log('info', 'scaler', "[Scaler::calculateCrop] ar is " ,ar.ratio, ", file ar is", streamAr, ", this.conf.player.dimensions are ", this.conf.player.dimensions.width, "×", this.conf.player.dimensions.height, "| obj:", this.conf.player.dimensions);
     
     var videoDimensions = {
       xFactor: 1,
@@ -120,11 +151,11 @@ class Scaler {
       actualHeight: 0,  // height of the video (excluding letterbox) when <video> tag height is equal to height
     }
   
-    if (fileAr < playerAr) {
-      if (fileAr < ar.ratio){
+    if (streamAr < playerAr) {
+      if (streamAr < ar.ratio){
         // in this situation we have to crop letterbox on top/bottom of the player
         // we cut it, but never more than the player
-        videoDimensions.xFactor = Math.min(ar.ratio, playerAr) / fileAr;
+        videoDimensions.xFactor = Math.min(ar.ratio, playerAr) / streamAr;
         videoDimensions.yFactor = videoDimensions.xFactor;
       } else {
         // in this situation, we would be cutting pillarbox. Inside horizontal player.
@@ -133,14 +164,14 @@ class Scaler {
         videoDimensions.yFactor = 1;
       }
     } else {
-      if (fileAr < ar.ratio || playerAr < ar.ratio){
+      if (streamAr < ar.ratio || playerAr < ar.ratio){
         // in this situation, we need to add extra letterbox on top of our letterbox
         // this means we simply don't crop anything _at all_
         videoDimensions.xFactor = 1;
         videoDimensions.yFactor = 1;
       } else {
         // meant for handling pillarbox crop. not quite implemented.
-        videoDimensions.xFactor = fileAr / Math.min(ar.ratio, playerAr);
+        videoDimensions.xFactor = streamAr / Math.min(ar.ratio, playerAr);
         videoDimensions.yFactor = videoDimensions.xFactor;
         // videoDimensions.xFactor = Math.max(ar.ratio, playerAr) * fileAr;
         // videoDimensions.yFactor = videoDimensions.xFactor;
@@ -148,6 +179,34 @@ class Scaler {
     }
     
     this.logger.log('info', 'scaler', "[Scaler::calculateCrop] Crop factor calculated — ", videoDimensions.xFactor);
+
+    // Workaround for Chrome/Edge issue where zooming too much results in video being stretched incorrectly
+    /**
+     * Bug description — if the following are true:
+     *   * user is using Chrome or Edge (but surprisingly not Opera)
+     *   * user is using hardware acceleration
+     *   * user is using a noVideo card
+     *   * user is in full screen mode
+     * Then the video will do Stretch.Basic no matter what you put in `transform: scale(x,y)`.
+     * 
+     * Because this issue happens regardless of how you upscale the video (doesn't matter if you use transform:scale
+     * or width+height or anything else), the aspect ratio needs to be limited _before_ applying arCorrectionFactor
+     * (note that arCorrectionFactor is usually <= 1, as it conpensates for zooming that height=[>100%] on <video>
+     * style attribute does). 
+     * 
+     * This method is also repeated in calculate stretch method.
+     */
+
+    if (BrowserDetect.anyChromium && this.conf.player?.isFullScreen && this.conf.player?.dimensions?.fullscreen) {
+      const maxSafeAr = (window.innerWidth * 0.995) / window.innerHeight;
+      
+      videoDimensions.xFactor = Math.min(videoDimensions.xFactor, maxSafeAr);
+      videoDimensions.yFactor = Math.min(videoDimensions.yFactor, maxSafeAr);
+    }
+
+    // correct the factors
+    videoDimensions.xFactor *= arCorrectionFactor;
+    videoDimensions.yFactor *= arCorrectionFactor;
 
     return videoDimensions;
   }

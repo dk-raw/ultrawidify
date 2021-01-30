@@ -213,9 +213,10 @@ export default {
       
       try {
         if (BrowserDetect.firefox) {
+          // reminder — webextension-polyfill doesn't seem to work in vue!
           await browser.permissions.request({permissions: ['downloads']});
           browser.downloads.download({saveAs: true, filename: 'ultrawidify-settings.json', url: fileUrl});
-        } else if (BrowserDetect.chrome) {
+        } else if (BrowserDetect.anyChromium) {
           const ths = this;
           
           chrome.permissions.request(

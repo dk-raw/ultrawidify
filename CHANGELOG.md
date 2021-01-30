@@ -1,19 +1,66 @@
 # Changelog
 
-## v4.x
+
 
 ### Plans for the future
 
-* WebGL
-* Native builds for Chromium Edge and Opera
+* Native builds for Chromium Edge
 * Settings page looks ugly af right now. Maybe fix it some time later
 * other bug fixes
 
-QoL improvements for me:
+## v5.0 (planned major)
 
-* logging: allow to enable logging at will and export said logs to a file
+ * WebGL autodetection
+ * in-player GUI
+ * Fix UI logger
 
-### v4.4.8 (Current)
+## v4.x (current major)
+
+### v4.5.2
+
+* Fixed the issue where videos would sometimes get misaligned while using hybrid stretch, except for real this time. ([#125](https://github.com/tamius-han/ultrawidify/issues/125))
+* Improved DRM detection (the 'autodetection cannot work on this site' popup should now no longer show up on the sites where autodetection _can_ work)
+
+### v4.5.1
+
+* Fixed the misalignment issue on netflix ... hopefully.
+* 'Site settings' tab should now work in Chrome as well ([#126](https://github.com/tamius-han/ultrawidify/issues/126))
+* Popup interface now refreshes properly ([#127](https://github.com/tamius-han/ultrawidify/issues/127))
+* Videos should now be scaled correctly when the display is narrower than video's native aspect ratio ([#118](https://github.com/tamius-han/ultrawidify/issues/118))
+* Fullscreen videos on streamable are aligned correctly ([#116](https://github.com/tamius-han/ultrawidify/issues/118)).
+* **[4.5.1.1]** Streamable fix broke old.reddit + RES on embeds from v.redd.it and streamable.com. We're now using an alternative implementation. ([#128](https://github.com/tamius-han/ultrawidify/issues/128))
+* **[4.5.1.2]** Fixed the issue where videos would sometimes get misaligned while using hybrid stretch. ([#125](https://github.com/tamius-han/ultrawidify/issues/125))
+* **[4.5.1.3]** Added fix for disney plus
+* **[4.5.1.3]** Microsoft Edge has fixed the bugs that prevented the extension from working properly. Popup should no longer be shown.
+
+
+### v4.5.0 (Current)
+
+* Under the hood: migrated from vue2 to vue3, because optional chaining in templates is too OP.
+* (On options page, section 'Action &amp; shortcuts') Manual aspect ratio now supports entering custom ratios using '21/9' and '2.39:1' formats (as opposed to single number, e.g. '2.39') — [#121](https://github.com/tamius-han/ultrawidify/issues/121).
+* Added config for wakanim.tv (special thanks to @saschanaz for doing the legwork — [#113](https://github.com/tamius-han/ultrawidify/issues/113))
+* (In Firefox) When extension was placed in overflow menu, the popup was cut off. That should be fixed now. [#119](https://github.com/tamius-han/ultrawidify/issues/119)
+* The extension will now show a notification when autodetection can't run due to DRM
+* Videos on facebook and reddit no longer get shifted up and to the left for me (cropping most of the video off-screen), but I haven't been deliberately trying to fix that issue. If you experience that issue, please consider contacting me (via github or email) with a link to a problematic video.
+
+### v4.4.10 
+
+* Video alignment should now work on Twitch — [#109](https://github.com/tamius-han/ultrawidify/issues/109)
+* Videos should now align properly on Hulu while cropped — [#111](https://github.com/tamius-han/ultrawidify/issues/111) & via email
+* Fixed a problem where changing certain settings would cause multiple instances of Ultrawidify to run on a page, effectively preventing some crop options to be set until reload. (possibly [#112](https://github.com/tamius-han/ultrawidify/issues/112)?)
+* Fixed a problem where embedded videos would be misaligned after switching from full screen
+* **[4.4.10.1]** Fixed cruncyhroll regression — [#109](https://github.com/tamius-han/ultrawidify/issues/115)
+
+### v4.4.9
+
+* Fixed the youtube alignment issue (previously fixed in v4.4.7.1-2), but this time for real (and in a bit more proper way)
+* Fixed the bug where extension wouldn't work when URL specified a port (e.g. www.example.com:80)
+* **[4.4.9.1]** removed source files from extension build in order to decrease package size
+* **[4.4.9.2]** updated dependencies and stuff
+
+In addition to that, as of 4.4.9.1 the build process ensures removal of `node_modules` before building the extension so we can have reproducible builds except for real this time. Hopefully.
+
+### v4.4.8
 
 * Fixed the bug where on pages with more than one video, the list of available videos in the extension popup wouldn't remove videos that are no longer displayed on site. This resulted in extension listing videos that were no longer on the page. Reboot or navigation would also not clear the list if navigating between various pages on the same host.
 * Fixed the chrome-only bug where on sites with more than one video, the number wouldn't get hidden when the extension popup closed.

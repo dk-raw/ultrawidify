@@ -2,7 +2,7 @@ import Debug from '../../conf/Debug';
 import BrowserDetect from '../../conf/BrowserDetect';
 
 if (process.env.CHANNEL !== 'stable'){
-  console.log("Loading CommsClient");
+  console.info("Loading CommsClient");
 }
 
 class CommsClient {
@@ -11,7 +11,7 @@ class CommsClient {
 
     if (BrowserDetect.firefox) {
       this.port = browser.runtime.connect({name: name});
-    } else if (BrowserDetect.chrome) {
+    } else if (BrowserDetect.anyChromium) {
       this.port = chrome.runtime.connect({name: name});
     }
 
@@ -130,7 +130,7 @@ class CommsClient {
 }
 
 if (process.env.CHANNEL !== 'stable'){
-  console.log("CommsClient loaded");
+  console.info("CommsClient loaded");
 }
 
 export default CommsClient;

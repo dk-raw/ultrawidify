@@ -9,6 +9,7 @@ import GuardLine from './GuardLine';
 import VideoAlignment from '../../../common/enums/video-alignment.enum';
 import AspectRatio from '../../../common/enums/aspect-ratio.enum';
 import {sleep} from '../../lib/Util';
+import BrowserDetect from '../../conf/BrowserDetect';
 
 class ArDetector {
 
@@ -38,6 +39,9 @@ class ArDetector {
     this._nextTick = false;
 
     this.canDoFallbackMode = false; 
+
+    this.drmNotificationShown = false;
+
     this.logger.log('info', 'init', `[ArDetector::ctor] creating new ArDetector. arid: ${this.arid}`);
   }
 
@@ -470,19 +474,19 @@ class ArDetector {
     
     // poglejmo, če se je razmerje stranic spremenilo
     // check if aspect ratio is changed:
-    var lastAr = this.conf.resizer.getLastAr();
+    let lastAr = this.conf.resizer.getLastAr();
     if (lastAr.type === AspectRatio.Automatic && lastAr.ratio !== null && lastAr.ratio !== undefined){
       // spremembo lahko zavrnemo samo, če uporabljamo avtomatski način delovanja in če smo razmerje stranic
       // že nastavili.
       //
       // we can only deny aspect ratio changes if we use automatic mode and if aspect ratio was set from here.
       
-      var arDiff = trueAr - lastAr.ar;
+      let arDiff = trueAr - lastAr.ar;
       
       if (arDiff < 0)
         arDiff = -arDiff;
       
-      var arDiff_percent = arDiff / trueAr;
+      const arDiff_percent = arDiff / trueAr;
       
       // ali je sprememba v mejah dovoljenega? Če da -> fertik
       // is ar variance within acceptable levels? If yes -> we done
@@ -506,6 +510,32 @@ class ArDetector {
     id = undefined;
   }
 
+  /**
+   * Checks whether video we're trying to play is protected by DRM. 
+   * 
+   * When trying to get an image frame of a DRM-protected video in
+   * firefox, the method canvas.drawImage(video) will throw an exception.
+   * 
+   * This doesn't happen in Chrome. As opposed to Firefox, chrome will
+   * simply draw a transparent black image and not tell anyone that
+   * anything is amiss. However, since the image is (according to my testing
+   * on netflix) completely transparent, this means we can determine whether
+   * the video is DRM-protected by looking at the alpha byte of the image.
+   * 
+   * (Videos don't tend to have an alpha channel, so they're always
+   * completely opaque (i.e. have value of 255))
+   */
+  hasDRM() {
+    // oh btw, there's one exception. There is this brief period between the point
+    // when metadata (video dimensions) have loaded and the moment the video starts
+    // playing where ctx.drawImage() will draw a transparent black square regardless
+    // of whether the video is actually DRM-protected or not.
+    if (! this.conf.hasVideoStartedPlaying()) {
+      return false;
+    }
+    return this.blackframeContext.getImageData(0,0,1,1).data[3] === 0;
+  }
+
   frameCheck(){
     if(! this.video){
       this.logger.log('error', 'debug', `%c[ArDetect::frameCheck] <@${this.arid}>  Video went missing. Destroying current instance of videoData.`);
@@ -525,14 +555,32 @@ class ArDetector {
     //
     try {
       this.blackframeContext.drawImage(this.video, 0, 0, this.blackframeCanvas.width, this.blackframeCanvas.height);
+
+      // special browsers require special tests
+      if (this.hasDRM()) {
+        this.fallbackMode = false;
+        throw 'VIDEO_DRM_PROTECTED';
+      }
       this.fallbackMode = false;
     } catch (e) {
       this.logger.log('error', 'arDetect', `%c[ArDetect::frameCheck] <@${this.arid}>  %c[ArDetect::frameCheck] can't draw image on canvas. ${this.canDoFallbackMode ? 'Trying canvas.drawWindow instead' : 'Doing nothing as browser doesn\'t support fallback mode.'}`, "color:#000; backgroud:#f51;", e);
 
-      // nothing to see here, really, if fallback mode isn't supported by browser
-      if (! this.canDoFallbackMode) {
+      // in case of DRM errors, we need to prevent the execution to reach the aspec
+      // ratio setting part of this function. For the time being, we're only stopping
+      // in case we encounter DRM error in Chrome. Firefox has fallback mode and generates
+      // different error, so that goes.
+      if (e === 'VIDEO_DRM_PROTECTED') {
+        // nothing to see here, really, if fallback mode isn't supported by browser
+        if (!this.drmNotificationShown) {
+          this.drmNotificationShown = true;
+
+          this.conf.player.showNotification('AARD_DRM');
+          this.conf.resizer.setAr({type: AspectRatio.Reset});
+        } 
+
         return;
       }
+
       if (! this.canvasReadyForDrawWindow()) {
         // this means canvas needs to be resized, so we'll just re-run setup with all those new parameters
         this.stop();

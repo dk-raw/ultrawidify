@@ -2,17 +2,13 @@
   <div>
     <h2>What's new</h2>
     <p>Full changelog for older versions <a href="https://github.com/tamius-han/ultrawidify/blob/master/CHANGELOG.md">is available here</a>.</p>
-    <p class="label">4.4.8</p>
+    <p class="label">4.5.2</p>
     <ul>
       <li>
-        Fixed the bug where on pages with more than one video, the list of available videos in the extension popup
-        wouldn't remove videos that are no longer displayed on site. This resulted in extension listing videos that
-        were no longer on the page. Reboot or navigation would also not clear the list if navigating between various
-        pages on the same host.
+        Fixed the issue where videos would sometimes get misaligned while using hybrid stretch, except for real this time. (<a href="https://github.com/tamius-han/ultrawidify/issues/125">#125</a>)
       </li>
       <li>
-        Fixed the chrome-only bug where on sites with more than one video, the number wouldn't get hidden when the
-        extension popup closed.
+        Improved DRM detection (the 'autodetection cannot work on this site' popup should now no longer show up on the sites where autodetection <i>can</i> work)
       </li>
     </ul>
   </div>

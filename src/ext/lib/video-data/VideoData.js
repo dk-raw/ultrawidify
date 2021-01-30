@@ -6,6 +6,7 @@ import AspectRatio from '../../../common/enums/aspect-ratio.enum';
 
 class VideoData {
   
+
   constructor(video, settings, pageInfo){
     this.vdid = (Math.random()*100).toFixed();
     this.logger = pageInfo.logger;
@@ -27,20 +28,14 @@ class VideoData {
       height: this.video.offsetHeight,
     };
 
-    // this is in case extension loads before the video
-    video.addEventListener('loadeddata', () => {
-      this.logger.log('info', 'init', '[VideoData::ctor->video.onloadeddata] Video fired event "loaded data!"');
-      this.onVideoLoaded();
-    });
-
-    // this one is in case extension loads after the video is loaded
-    video.addEventListener('timeupdate', () => {
-      this.onVideoLoaded();
-    });
+    this.setupStageOne();
   }
 
   async onVideoLoaded() {
     if (!this.videoLoaded) {
+      if (!this.video.videoWidth || !this.video.videoHeight) {
+        return; // onVideoLoaded is a lie in this case
+      }
       this.logger.log('info', 'init', '%c[VideoData::onVideoLoaded] ——————————— Initiating phase two of videoData setup ———————————', 'color: #0f9');
 
       this.videoLoaded = true;
@@ -59,6 +54,66 @@ class VideoData {
     }
   }
 
+  videoUnloaded() {
+    this.videoLoaded = false;
+  }
+
+  async injectBaseCss() {
+    try {
+    await this.pageInfo.injectCss(`
+      .uw-ultrawidify-base-wide-screen {
+        margin: 0px 0px 0px 0px !important;
+        width: initial !important;
+        align-self: start !important;
+        justify-self: start !important;
+      }
+    `);
+    } catch (e) {
+      console.error('Failed to inject base css!', e);
+    }
+  }
+
+  unsetBaseClass() {
+    this.video.classList.remove('uw-ultrawidify-base-wide-screen');
+  }
+
+  //#region <video> event handlers
+  onLoadedData() {
+    this.logger.log('info', 'init', '[VideoData::ctor->video.onloadeddata] Video fired event "loaded data!"');
+    this.onVideoLoaded();
+  }
+  onLoadedMetadata() {
+    this.logger.log('info', 'init', '[VideoData::ctor->video.onloadedmetadata] Video fired event "loaded metadata!"');
+    this.onVideoLoaded();
+  }
+  onTimeUpdate() {
+    this.onVideoLoaded();
+  }
+  //#endregion
+
+  //#region lifecycle-ish
+  /**
+   * Injects base CSS and sets up handlers for <video> tag events
+   */
+  async setupStageOne() {
+    this.logger.log('info', 'init', '%c[VideoData::setupStageOne] ——————————— Starting setup stage one! ———————————', 'color: #0f9');
+    // ensure base css is loaded before doing anything
+    this.injectBaseCss();
+
+    // this is in case extension loads before the video
+    this.video.addEventListener('loadeddata', this.onLoadedData.bind(this));
+    this.video.addEventListener('loadedmetadata', this.onLoadedMetadata.bind(this));
+
+    // this one is in case extension loads after the video is loaded
+    this.video.addEventListener('timeupdate', this.onTimeUpdate.bind(this));
+
+    this.logger.log('info', 'init', '%c[VideoData::setupStageOne] ——————————— Setup stage one complete! ———————————', 'color: #0f9');
+  }
+
+  /**
+   * Launches the extension for a given video (after the video element is defined well enough
+   * for our standards)
+   */
   async setupStageTwo() {
     // POZOR: VRSTNI RED JE POMEMBEN (arDetect mora bit zadnji)
     // NOTE: ORDERING OF OBJ INITIALIZATIONS IS IMPORTANT (arDetect needs to go last)
@@ -97,7 +152,12 @@ class VideoData {
     this.logger.log('info', ['debug', 'init'], '[VideoData::ctor] Created videoData with vdid', this.vdid, '\nextension mode:', this.extensionMode)
 
     this.pageInfo.initMouseActionHandler(this);
+    
+    // NOTE — since base class for our <video> element depends on player aspect ratio,
+    // we handle it in PlayerData class.
+    this.video.classList.add('uw-ultrawidify-base-wide-screen'); 
     this.video.classList.add(this.userCssClassName); // this also needs to be applied BEFORE we initialize resizer!
+
 
     // start fallback video/player size detection
     this.fallbackChangeDetection();
@@ -122,8 +182,55 @@ class VideoData {
     }
   }
 
+  /**
+   * cleans up handlers and stuff when the show is over
+   */
+  destroy() {
+    this.logger.log('info', ['debug', 'init'], `[VideoData::destroy] <vdid:${this.vdid}> received destroy command`);
+
+    if (this.video) {
+      this.video.classList.remove(this.userCssClassName);
+      this.video.classList.remove('uw-ultrawidify-base-wide-screen'); 
+
+      this.video.removeEventListener('onloadeddata', this.onLoadedData);
+      this.video.removeEventListener('onloadedmetadata', this.onLoadedMetadata);
+      this.video.removeEventListener('ontimeupdate', this.onTimeUpdate);
+    }
+
+    this.pause();
+    this.destroyed = true;
+    try {
+      this.arDetector.stop();
+      this.arDetector.destroy();
+    } catch (e) {}
+    this.arDetector = undefined;
+    try {
+      this.resizer.destroy();
+    } catch (e) {}
+    this.resizer = undefined;
+    try {
+      this.player.destroy();
+    } catch (e) {}
+    try {
+      this.observer.disconnect();
+    } catch (e) {}
+    this.player = undefined;
+    this.video = undefined;
+  }
+  //#endregion
+
+  //#region video status
+  isVideoPlaying() {
+    return this.video && !!(this.video.currentTime > 0 && !this.video.paused && !this.video.ended && this.video.readyState > 2);
+  }
+
+  hasVideoStartedPlaying() {
+    return this.video && this.video.currentTime > 0;
+  }
+  //#endregion
+
   restoreCrop() {  
-    this.logger.log('info', 'debug', '[VideoData::restoreCrop] Attempting to reset/restore aspect ratio.')
+    this.logger.log('info', 'debug', '[VideoData::restoreCrop] Attempting to reset aspect ratio.')
     // if we have default crop set for this page, apply this.
     // otherwise, reset crop
     if (this.pageInfo.defaultCrop) {
@@ -132,6 +239,7 @@ class VideoData {
       this.resizer.reset();
 
       try {
+        this.stopArDetection();
         this.startArDetection();
       } catch (e) {
         this.logger.log('warn', 'debug', '[VideoData::restoreCrop] Autodetection not resumed. Reason:', e);
@@ -173,7 +281,8 @@ class VideoData {
             // we still only need to make sure we're only adding our class to classlist if it has been
             // removed. classList.add() will _still_ trigger mutation (even if classlist wouldn't change).
             // This is a problem because INFINITE RECURSION TIME, and we _really_ don't want that.
-            context.video.classList.add(this.userCssClassName);  
+            context.video.classList.add(this.userCssClassName);
+            context.video.classList.add('uw-ultrawidify-base-wide-screen'); 
           }
           // always trigger refresh on class changes, since change of classname might trigger change 
           // of the player size as well.
@@ -241,6 +350,54 @@ class VideoData {
     return a < b + diff && a > b - diff
   }
 
+  /**
+   * Gets the contents of the style attribute of the video element
+   * in a form of an object.
+   */
+  getVideoStyle() {
+    // This will _always_ give us an array. Empty string gives an array
+    // that contains one element. That element is an empty string.
+    const styleArray = (this.video.getAttribute('style') || '').split(';');
+    
+    const styleObject = {};
+
+    for (const style of styleArray) {
+      // not a valid CSS, so we skip those
+      if (style.indexOf(':') === -1) {
+        continue;
+      }
+
+      // let's play _very_ safe
+      let [property, value] = style.split('!important')[0].split(':');
+      value = value.trim();
+      styleObject[property] = value;
+    }
+
+    return styleObject;
+  }
+
+  /**
+   * Some sites try to accomodate ultrawide users by "cropping" videos
+   * by setting 'style' attribute of the video element to 'height: X%',
+   * where 'X' is something greater than 100.
+   * 
+   * This function gets that percentage and converts it into a factor.
+   */
+  getHeightCompensationFactor() {
+    const heightStyle = this.getVideoStyle()?.height;
+
+    if (!heightStyle || !heightStyle.endsWith('%')) {
+      return 1;
+    }
+
+    const heightCompensationFactor = heightStyle.split('%')[0] / 100;
+    if (isNaN(heightCompensationFactor)) {
+      return 1;
+    }
+    return heightCompensationFactor;
+  }
+
+
   firstTimeArdInit(){
     if(this.destroyed || this.invalid) {
       // throw {error: 'VIDEO_DATA_DESTROYED', data: {videoData: this}};
@@ -289,34 +446,6 @@ class VideoData {
     if (this.arDetector) {
       this.arDetector.stop();
     }
-  }
-
-  destroy() {
-    this.logger.log('info', ['debug', 'init'], `[VideoData::destroy] <vdid:${this.vdid}> received destroy command`);
-
-    if (this.video) {
-      this.video.classList.remove(this.userCssClassName);
-    }
-
-    this.pause();
-    this.destroyed = true;
-    try {
-      this.arDetector.stop();
-      this.arDetector.destroy();
-    } catch (e) {}
-    this.arDetector = undefined;
-    try {
-      this.resizer.destroy();
-    } catch (e) {}
-    this.resizer = undefined;
-    try {
-      this.player.destroy();
-    } catch (e) {}
-    try {
-      this.observer.disconnect();
-    } catch (e) {}
-    this.player = undefined;
-    this.video = undefined;
   }
 
   pause(){

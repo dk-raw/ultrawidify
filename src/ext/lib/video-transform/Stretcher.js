@@ -133,9 +133,19 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
     return this.calculateStretch(actualAr, this.fixedStretchRatio);
   }
 
-  calculateStretch(actualAr, playerArOverride) {
+  getArCorrectionFactor() {
+    const streamAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
+    const playerAr = this.conf.player.dimensions.width / this.conf.player.dimensions.height;
+
+    let arCorrectionFactor = 1;
+    arCorrectionFactor = this.conf.player.dimensions.width / this.conf.video.offsetWidth;
+
+    return arCorrectionFactor;
+  }
+
+   calculateStretch(actualAr, playerArOverride) {
     const playerAr = playerArOverride || this.conf.player.dimensions.width / this.conf.player.dimensions.height;
-    const videoAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
+    const streamAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
 
     if (! actualAr){
       actualAr = playerAr;
@@ -146,7 +156,7 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
       yFactor: 1
     };
 
-    if (playerAr >= videoAr){
+    if (playerAr >= streamAr){
       // player adds PILLARBOX
 
       if(actualAr >= playerAr){
@@ -155,18 +165,18 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
         // actual > player > video  — video is letterboxed
         // solution: horizontal stretch according to difference between video and player AR
         //           vertical stretch according to difference between actual AR and player AR
-        stretchFactors.xFactor = playerAr / videoAr;
-        stretchFactors.yFactor = actualAr / videoAr;
+        stretchFactors.xFactor = playerAr / streamAr;
+        stretchFactors.yFactor = actualAr / streamAr;
 
         this.logger.log('info', 'stretcher', "[Stretcher.js::calculateStretch] stretching strategy 1")
-      } else if ( actualAr >= videoAr) {
+      } else if ( actualAr >= streamAr) {
         // VERIFIED WORKS
 
         // player > actual > video — video is still letterboxed
         // we need vertical stretch to remove black bars in video
         // we need horizontal stretch to make video fit width
-        stretchFactors.xFactor = playerAr / videoAr;
-        stretchFactors.yFactor = actualAr / videoAr;
+        stretchFactors.xFactor = playerAr / streamAr;
+        stretchFactors.yFactor = actualAr / streamAr;
 
         this.logger.log('info', 'stretcher', "[Stretcher.js::calculateStretch] stretching strategy 2")
       } else {
@@ -177,6 +187,7 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
         
         this.logger.log('info', 'stretcher', "[Stretcher.js::calculateStretch] stretching strategy 3")
       }
+
     } else {
       // player adds LETTERBOX
 
@@ -186,10 +197,10 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
         // video > player > actual
         // video is PILLARBOXED
         stretchFactors.xFactor = actualAr / playerAr;
-        stretchFactors.yFactor = videoAr / playerAr;
+        stretchFactors.yFactor = streamAr / playerAr;
 
         this.logger.log('info', 'stretcher', "[Stretcher.js::calculateStretch] stretching strategy 4")
-      } else if ( actualAr < videoAr ) {
+      } else if ( actualAr < streamAr ) {
         // NEEDS CHECKING 
 
         // video > actual > player
@@ -211,7 +222,56 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
       }
     }
 
+    // const arCorrectionFactor = this.getArCorrectionFactor();
+    // correct factors, unless we're trying to reset
+    // stretchFactors.xFactor *= arCorrectionFactor;
+    // stretchFactors.yFactor *= arCorrectionFactor;
+    stretchFactors.arCorrectionFactor = this.getArCorrectionFactor();
+
     return stretchFactors;
+  }
+
+  /**
+   * Ensure that <video> element is never both taller-ish and wider-ish than the screen, while in fullscreen
+   * on Chromium-based browsers. 
+   * 
+   * Workaround for Chrome/Edge issue where zooming too much results in video being stretched incorrectly.
+   * 
+   * Bug description — if the following are true:
+   *   * user is using Chrome or Edge (but surprisingly not Opera)
+   *   * user is using hardware acceleration
+   *   * user is using a noVideo card
+   *   * user is in full screen mode
+   *   * the video is both roughly taller and roughly wider than the monitor
+   * Then the video will do Stretch.Basic no matter what you put in `transform: scale(x,y)`.
+   * 
+   * In practice, the issue appears slightly _before_ the last condition is met (video needs to be ~3434 px wide
+   * in order for this bug to trigger on my 3440x1440 display).
+   * 
+   * Because this issue happens regardless of how you upscale the video (doesn't matter if you use transform:scale
+   * or width+height or anything else), the aspect ratio needs to be limited _before_ applying arCorrectionFactor
+   * (note that arCorrectionFactor is usually <= 1, as it conpensates for zooming that height=[>100%] on <video>
+   * style attribute does).
+   */
+  chromeBugMitigation(stretchFactors) {
+      if (BrowserDetect.anyChromium && this.conf.player?.isFullScreen && this.conf.player?.dimensions?.fullscreen) {
+        const playerAr = playerArOverride || this.conf.player.dimensions.width / this.conf.player.dimensions.height;
+        const streamAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
+        
+        let maxSafeAr;
+
+        if (playerAr >= (streamAr * 1.1)) {
+          maxSafeAr = (window.innerWidth * 0.997) / window.innerHeight;
+        } else if (playerAr < (streamAr * 0.95)) {
+          maxSafeAr = window.innerWidth / (window.innerHeight * 0.997);
+        } else {
+          // in some cases, we tolerate minor stretch to avoid tiny black bars
+          return;
+        }
+        
+        stretchFactors.xFactor = Math.min(stretchFactors.xFactor, maxSafeAr);
+        stretchFactors.yFactor = Math.min(stretchFactors.yFactor, maxSafeAr);
+      }
   }
 }
 
