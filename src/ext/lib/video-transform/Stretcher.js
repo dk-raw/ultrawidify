@@ -258,7 +258,7 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
     console.warn('in chrome bug mitigation. conditions:\nis chromium-based?', BrowserDetect.anyChromium, '\nfullscreen?', this.conf.player?.dimensions?.fullscreen);
 
     if (BrowserDetect.anyChromium && this.conf.player?.dimensions?.fullscreen) {
-      const playerAr = playerArOverride || this.conf.player.dimensions.width / this.conf.player.dimensions.height;
+      const playerAr = this.conf.player.dimensions.width / this.conf.player.dimensions.height;
       const streamAr = this.conf.video.videoWidth / this.conf.video.videoHeight;
       
       let maxSafeAr;
