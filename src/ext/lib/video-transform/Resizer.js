@@ -611,6 +611,7 @@ class Resizer {
   }
 
   applyCss(stretchFactors, translate){
+    console.log("apply css is being called")
     // apply extra CSS here. In case of duplicated properties, extraCss overrides 
     // default styleString
     if (! this.video) {
