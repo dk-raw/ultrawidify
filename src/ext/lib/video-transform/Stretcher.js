@@ -255,7 +255,8 @@ squeezeFactor:          ${squeezeFactor}`, '\nvideo', this.conf.video);
    * style attribute does).
    */
   chromeBugMitigation(stretchFactors) {
-    console.warn('in chrome bug mitigation. conditions:\nis chromium-based?', BrowserDetect.anyChromium, '\nfullscreen?', this.conf.player?.dimensions?.fullscreen);
+    console.warn('in chrome bug mitigation. conditions:\nis chromium-based?', BrowserDetect.anyChromium, '\nfullscreen?', this.conf.player?.dimensions?.fullscreen,
+    '\nconf:',  this.conf, '\nresizer:', this.conf.resizer);
 
     if (BrowserDetect.anyChromium && this.conf.player?.dimensions?.fullscreen) {
       const playerAr = this.conf.player.dimensions.width / this.conf.player.dimensions.height;
