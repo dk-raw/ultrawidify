@@ -12,13 +12,15 @@ pipeline {
 
     stage('Install dependencies') {
       steps {
-        sh 'npm ci'
+        sh "echo 'test'"
+        sh "npm ci"
       }
     }
 
     stage('Build') {
       steps {
-        sh 'npm run build-all'
+        sh "echo test 2"
+        sh "npm run build-all"
       }
     }
 
